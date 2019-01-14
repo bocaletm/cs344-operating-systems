@@ -1,0 +1,78 @@
+#!/bin/bash
+
+##################
+# Mario Bocaletti
+# CS344 Operating Systems
+# matrix operations
+##################
+
+#exit early for easy-to-catch errors
+if [ "$#" -gt 3 ];
+then
+    echo Error. Too many arguments. Exiting now... 1>&2
+    exit 1
+elif [ "$#" -lt 1 ];
+then 
+   echo Error. Too few arguments. Exiting now... 1>&2
+   exit 1
+fi
+
+dims() {
+    #get the matrix into a variable
+    if [ "$#" -eq 0 ]; then
+        echo line 26
+        matrix=$(cat)
+    elif [ "$#" -eq 1 ]; then
+        matrix=$(cat $1)
+    else
+        echo Error. Invalid number of arguments. Exiting now... 1>&2
+        exit 1
+    fi
+    echo "$matrix"
+    #count the rows
+    rows=$(echo "$matrix" | wc -l)
+    #count the columns (number of tabs divided by rows plus 2)
+    firstLine=$(echo "$matrix" | head -1)
+    columns=0
+    for num in $firstLine; do
+        ((columns++)) 
+    done
+    printf "$rows $columns\n"
+}
+transpose() {
+    echo
+}
+mean() {
+    echo
+}
+add() {
+    echo
+}
+multiply() {
+    echo
+}
+##check for empty matrix
+#if [[ $matrix == "" ]]; then
+#    echo No matrix passed. Exiting now... 1>&2
+#    exit 1
+#fi
+#
+##check for non integer input
+#nonIntegers=$(cat $matrix | grep -v [1-9])
+#if [[ $nonIntegers != "" ]]; then
+#    echo Invalid matrix. Some elements are not integers. Exiting now...
+#    exit 1
+#fi
+#
+#check for valid operations
+operation=$1
+operations=("dims" "transpose" "mean" "add" "multiply")
+if [[ ! " ${operations[@]} " =~ " ${operation} " ]]; then
+    echo Invalid operation \"$1\". Exiting now... 1>&2
+    exit 1
+fi
+
+#call the functions
+$1 "${@:2}"
+
+
