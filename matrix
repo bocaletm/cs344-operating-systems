@@ -20,7 +20,6 @@ fi
 dims() {
     #get the matrix into a variable
     if [ "$#" -eq 0 ]; then
-        echo line 26
         matrix=$(cat)
     elif [ "$#" -eq 1 ]; then
         matrix=$(cat $1)
@@ -28,7 +27,6 @@ dims() {
         echo Error. Invalid number of arguments. Exiting now... 1>&2
         exit 1
     fi
-    echo "$matrix"
     #count the rows
     rows=$(echo "$matrix" | wc -l)
     #count the columns (number of tabs divided by rows plus 2)
@@ -40,7 +38,24 @@ dims() {
     printf "$rows $columns\n"
 }
 transpose() {
-    echo
+     #get the matrix into a variable
+    if [ "$#" -eq 0 ]; then
+        matrix=$(cat)
+    elif [ "$#" -eq 1 ]; then
+        matrix=$(cat $1)
+    else
+        echo Error. Invalid number of arguments. Exiting now... 1>&2
+        exit 1
+    fi
+    #use dims to get the columns
+    dims=$(echo "$matrix" | dims)
+    arr=($dims)
+    cols=${arr[1]}
+    for ((i=1; i <= $cols; i++)); do
+        echo "$matrix" | cut -f$i | tr '\n' '\t'
+        echo
+    done
+
 }
 mean() {
     echo
