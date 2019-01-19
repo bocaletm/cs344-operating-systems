@@ -69,38 +69,32 @@ mean() {
     exit 1
   fi
 
-  echo 'matrix'
-  echo "$matrix"
-
   #use dims to get the column count
   dims=$(echo "$matrix" | dims)
   arr=($dims)
   cols=${arr[1]}
 
-  echo 'dims'
-  echo "$dims"
-
   #use transpose to traverse each column more easily in row form 
   tranMatrix=$(echo "$matrix" | transpose)
-  echo 'transmatrix'
-  echo "$tranMatrix"
-  echo
-  echo
+  result=''
   while read -r line; do
-    #echo line[$line]
     count=0
     sum=0
     for num in $line; do
-      #echo num[$num]
       (( sum+=$num ))
       (( count+=1 ))
     done
-    echo sum: $sum
-    echo cnt: $count
 
     mean=$(( ($sum + ($count / 2)) / $count ))
-    printf "$mean "
+    #format result in matrix format
+    if [ "$result" == '' ]; then
+      result=$mean
+    else
+      result=$result'\t'$mean
+    fi
   done <<< $tranMatrix
+  result=$result'\n'
+  printf $result
 }
 add() {
   echo
