@@ -9,62 +9,104 @@
 #exit early for easy-to-catch errors
 if [ "$#" -gt 3 ];
 then
-    echo Error. Too many arguments. Exiting now... 1>&2
-    exit 1
+  echo Error. Too many arguments. Exiting now... 1>&2
+  exit 1
 elif [ "$#" -lt 1 ];
 then 
-   echo Error. Too few arguments. Exiting now... 1>&2
-   exit 1
+  echo Error. Too few arguments. Exiting now... 1>&2
+  exit 1
 fi
 
 dims() {
-    #get the matrix into a variable
-    if [ "$#" -eq 0 ]; then
-        matrix=$(cat)
-    elif [ "$#" -eq 1 ]; then
-        matrix=$(cat $1)
-    else
-        echo Error. Invalid number of arguments. Exiting now... 1>&2
-        exit 1
-    fi
-    #count the rows
-    rows=$(echo "$matrix" | wc -l)
-    #count the columns (number of tabs divided by rows plus 2)
-    firstLine=$(echo "$matrix" | head -1)
-    columns=0
-    for num in $firstLine; do
-        ((columns++)) 
-    done
-    printf "$rows $columns\n"
+  #get the matrix into a variable
+  if [ "$#" -eq 0 ]; then
+    matrix=$(cat)
+  elif [ "$#" -eq 1 ]; then
+    matrix=$(cat $1)
+  else
+    echo Error. Invalid number of arguments. Exiting now... 1>&2
+    exit 1
+  fi
+  #count the rows
+  rows=$(echo "$matrix" | wc -l)
+  #count the columns (number of items in the first line)
+  firstLine=$(echo "$matrix" | head -1)
+  columns=0
+  for num in $firstLine; do
+    ((columns++)) 
+  done
+  printf "$rows $columns\n"
 }
 transpose() {
-     #get the matrix into a variable
-    if [ "$#" -eq 0 ]; then
-        matrix=$(cat)
-    elif [ "$#" -eq 1 ]; then
-        matrix=$(cat $1)
-    else
-        echo Error. Invalid number of arguments. Exiting now... 1>&2
-        exit 1
-    fi
-    #use dims to get the columns
-    dims=$(echo "$matrix" | dims)
-    arr=($dims)
-    cols=${arr[1]}
-    for ((i=1; i <= $cols; i++)); do
-        echo "$matrix" | cut -f$i | tr '\n' '\t'
-        echo
-    done
+  #get the matrix into a variable
+  if [ "$#" -eq 0 ]; then
+    matrix=$(cat)
+  elif [ "$#" -eq 1 ]; then
+    matrix=$(cat $1)
+  else
+    echo Error. Invalid number of arguments. Exiting now... 1>&2
+    exit 1
+  fi
+  #use dims to get the columns
+  dims=$(echo "$matrix" | dims)
+  arr=($dims)
+  cols=${arr[1]}
+  #cut each column and turn it into a row by replacing newlines with tabs
+  for ((i=1; i <= $cols; i++)); do
+    echo "$matrix" | cut -f$i | tr '\n' '\t'
+    echo
+  done
 
 }
 mean() {
-    echo
+  #get the matrix into a variable
+  if [ "$#" -eq 0 ]; then
+    matrix=$(cat)
+  elif [ "$#" -eq 1 ]; then
+    matrix=$(cat $1)
+  else
+    echo Error. Invalid number of arguments. Exiting now... 1>&2
+    exit 1
+  fi
+
+  echo 'matrix'
+  echo "$matrix"
+
+  #use dims to get the column count
+  dims=$(echo "$matrix" | dims)
+  arr=($dims)
+  cols=${arr[1]}
+
+  echo 'dims'
+  echo "$dims"
+
+  #use transpose to traverse each column more easily in row form 
+  tranMatrix=$(echo "$matrix" | transpose)
+  echo 'transmatrix'
+  echo "$tranMatrix"
+  echo
+  echo
+  while read -r line; do
+    #echo line[$line]
+    count=0
+    sum=0
+    for num in $line; do
+      #echo num[$num]
+      (( sum+=$num ))
+      (( count+=1 ))
+    done
+    echo sum: $sum
+    echo cnt: $count
+
+    mean=$(( ($sum + ($count / 2)) / $count ))
+    printf "$mean "
+  done <<< $tranMatrix
 }
 add() {
-    echo
+  echo
 }
 multiply() {
-    echo
+  echo
 }
 ##check for empty matrix
 #if [[ $matrix == "" ]]; then
@@ -82,9 +124,10 @@ multiply() {
 #check for valid operations
 operation=$1
 operations=("dims" "transpose" "mean" "add" "multiply")
+#error out if operations does not contain the argument
 if [[ ! " ${operations[@]} " =~ " ${operation} " ]]; then
-    echo Invalid operation \"$1\". Exiting now... 1>&2
-    exit 1
+  echo Invalid operation \"$1\". Exiting now... 1>&2
+  exit 1
 fi
 
 #call the functions
