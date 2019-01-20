@@ -37,6 +37,7 @@ dims() {
   done
   printf "$rows $columns\n"
 }
+
 transpose() {
   #get the matrix into a variable
   if [ "$#" -eq 0 ]; then
@@ -58,6 +59,7 @@ transpose() {
   done
 
 }
+
 mean() {
   #get the matrix into a variable
   if [ "$#" -eq 0 ]; then
@@ -96,12 +98,107 @@ mean() {
   result=$result'\n'
   printf $result
 }
+
 add() {
-  echo
+  #get the matrixes into variables
+  if [ "$#" -eq 2 ]; then
+    matrix1=$(cat $1)
+    matrix2=$(cat $2)
+  else
+    echo Error. Invalid number of arguments. Exiting now... 1>&2
+    exit 1
+  fi
+
+  #use dims to get the column and row counts
+  dims=$(echo "$matrix1" | dims)
+  arr=($dims)
+  rows=${arr[0]}
+  cols=${arr[1]}
+  count=$(expr $rows \* $cols)
+  sum=0
+
+  #use echo to trim all the whitespace to make array conversion easier
+  matrix1=$(echo $matrix1)
+  matrix2=$(echo $matrix2)
+
+  #convert the strings to arrays
+  matrix1=($matrix1)
+  matrix2=($matrix2)
+  
+  #perform additions
+  idx=0
+  result=''
+
+  colCount=$cols
+  for ((j=0; j < $count; j++)); do
+    #add the numbers
+    sum=$(expr ${matrix1[$idx]} + ${matrix1[$idx]})
+    #format back into rows and columns
+    if [ "$result" == '' ]; then
+      result=$sum
+    elif [ $colCount -gt 0 ]; then
+      result=$result'\t'$sum
+    else
+      result="$result"'\n'$sum
+      colCount=$cols
+    fi
+    ((idx++))
+    ((colCount--))
+  done
+  result=$result'\n'
+  printf $result
 }
+
 multiply() {
-  echo
+  #get the matrixes into variables
+  if [ "$#" -eq 2 ]; then
+    matrix1=$(cat $1)
+    matrix2=$(cat $2)
+  else
+    echo Error. Invalid number of arguments. Exiting now... 1>&2
+    exit 1
+  fi
+
+  #use dims to get the column and row counts
+  dims=$(echo "$matrix1" | dims)
+  arr=($dims)
+  rows=${arr[0]}
+  cols=${arr[1]}
+  count=$(expr $rows \* $cols)
+  sum=0
+
+  #use echo to trim all the whitespace to make array conversion easier
+  matrix1=$(echo $matrix1)
+  matrix2=$(echo $matrix2)
+
+  #convert the strings to arrays
+  matrix1=($matrix1)
+  matrix2=($matrix2)
+  
+  #perform additions
+  idx=0
+  result=''
+
+  colCount=$cols
+  for ((j=0; j < $count; j++)); do
+    #add the numbers
+    sum=$(expr ${matrix1[$idx]} \* ${matrix1[$idx]})
+    #format back into rows and columns
+    if [ "$result" == '' ]; then
+      result=$sum
+    elif [ $colCount -gt 0 ]; then
+      result=$result'\t'$sum
+    else
+      result="$result"'\n'$sum
+      colCount=$cols
+    fi
+    ((idx++))
+    ((colCount--))
+  done
+  result=$result'\n'
+  printf $result
 }
+
 ##check for empty matrix
 #if [[ $matrix == "" ]]; then
 #    echo No matrix passed. Exiting now... 1>&2
