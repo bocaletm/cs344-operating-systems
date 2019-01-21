@@ -73,8 +73,11 @@ transpose() {
   cols=${arr[1]}
   #cut each column and turn it into a row by replacing newlines with tabs
   for ((i=1; i <= $cols; i++)); do
-    echo "$matrix" | cut -f$i | tr '\n' '\t'
-    echo
+    #tr leaves trailing tab
+    row="$(echo "$matrix" | cut -f$i | tr '\n' '\t')"
+    #remove trailing tab
+    row=${row%?}
+    echo "$row"
   done
 
 }
