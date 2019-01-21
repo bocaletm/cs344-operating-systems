@@ -17,12 +17,26 @@ then
   exit 1
 fi
 
+#check for valid operations
+operation=$1
+operations=("dims" "transpose" "mean" "add" "multiply")
+#error out if operations does not contain the argument
+if [[ ! " ${operations[@]} " =~ " ${operation} " ]]; then
+  echo Invalid operation \"$1\". Exiting now... 1>&2
+  exit 1
+fi
+
 dims() {
   #get the matrix into a variable
   if [ "$#" -eq 0 ]; then
     matrix=$(cat)
   elif [ "$#" -eq 1 ]; then
-    matrix=$(cat $1)
+    if [ -f $1 ]; then
+      matrix=$(cat $1)
+    else
+      echo Error. No file by name $1. 1>&2
+      exit 1
+    fi
   else
     echo Error. Invalid number of arguments. Exiting now... 1>&2
     exit 1
@@ -43,7 +57,12 @@ transpose() {
   if [ "$#" -eq 0 ]; then
     matrix=$(cat)
   elif [ "$#" -eq 1 ]; then
-    matrix=$(cat $1)
+    if [ -f $1 ]; then
+      matrix=$(cat $1)
+    else
+      echo Error. No file by name $1. 1>&2
+      exit 1
+    fi
   else
     echo Error. Invalid number of arguments. Exiting now... 1>&2
     exit 1
@@ -65,7 +84,12 @@ mean() {
   if [ "$#" -eq 0 ]; then
     matrix=$(cat)
   elif [ "$#" -eq 1 ]; then
-    matrix=$(cat $1)
+    if [ -f $1 ]; then
+      matrix=$(cat $1)
+    else
+      echo Error. No file by name $1. 1>&2
+      exit 1
+    fi
   else
     echo Error. Invalid number of arguments. Exiting now... 1>&2
     exit 1
@@ -79,6 +103,7 @@ mean() {
   #use transpose to traverse each column more easily in row form 
   tranMatrix=$(echo "$matrix" | transpose)
   result=''
+  #process the transposed matrix line by line
   while read -r line; do
     count=0
     sum=0
@@ -86,7 +111,7 @@ mean() {
       (( sum+=$num ))
       (( count+=1 ))
     done
-
+    #use formula for proper rounding
     mean=$(( ($sum + ($count / 2)) / $count ))
     #format result in matrix format
     if [ "$result" == '' ]; then
@@ -102,16 +127,25 @@ mean() {
 add() {
   #get the matrixes into variables
   if [ "$#" -eq 2 ]; then
-    matrix1=$(cat $1)
-    matrix2=$(cat $2)
+    if [ -f $1 ] & [ -f $2 ]; then
+      matrix1=$(cat $1)
+      matrix2=$(cat $2)
+    else
+      echo Error. Cannot find both $1 and $2. Exiting now... 1>&2
+      exit 1
   else
     echo Error. Invalid number of arguments. Exiting now... 1>&2
     exit 1
   fi
 
   #use dims to get the column and row counts
-  dims=$(echo "$matrix1" | dims)
-  arr=($dims)
+  dims1=$(echo "$matrix1" | dims)
+  dims2=$(echo "$matrix2" | dims)
+  #check if the operation is valid
+  if [ "$dims1" != "$dims2" ]; then
+    echo Error. Matrixes cannot be added. Exiting now... 1>&2
+  fi
+  arr=($dims1)
   rows=${arr[0]}
   cols=${arr[1]}
   count=$(expr $rows \* $cols)
@@ -152,16 +186,27 @@ add() {
 multiply() {
   #get the matrixes into variables
   if [ "$#" -eq 2 ]; then
-    matrix1=$(cat $1)
-    matrix2=$(cat $2)
+    if [ -f $1 ] & [ -f $2 ]; then
+      matrix1=$(cat $1)
+      matrix2=$(cat $2)
+    else
+      echo Error. Cannot find both $1 and $2. Exiting now... 1>&2
+      exit 1
+    fi
   else
     echo Error. Invalid number of arguments. Exiting now... 1>&2
     exit 1
   fi
 
   #use dims to get the column and row counts
-  dims=$(echo "$matrix1" | dims)
-  arr=($dims)
+  dims1=$(echo "$matrix1" | dims)
+  dims2=$(echo "$matrix2" | dims)
+  #check if the operation is valid
+  if [ "$dims1" != "$dims2" ]; then
+    echo Error. Matrixes cannot be added. Exiting now... 1>&2
+  fi
+
+  arr=($dims1)
   rows=${arr[0]}
   cols=${arr[1]}
   count=$(expr $rows \* $cols)
@@ -208,18 +253,10 @@ multiply() {
 ##check for non integer input
 #nonIntegers=$(cat $matrix | grep -v [1-9])
 #if [[ $nonIntegers != "" ]]; then
-#    echo Invalid matrix. Some elements are not integers. Exiting now...
+#    echo Invalid matrix. Some elements are not integers. Exiting now... 1>&2
 #    exit 1
 #fi
 #
-#check for valid operations
-operation=$1
-operations=("dims" "transpose" "mean" "add" "multiply")
-#error out if operations does not contain the argument
-if [[ ! " ${operations[@]} " =~ " ${operation} " ]]; then
-  echo Invalid operation \"$1\". Exiting now... 1>&2
-  exit 1
-fi
 
 #call the functions
 $1 "${@:2}"
