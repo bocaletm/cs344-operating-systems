@@ -114,8 +114,14 @@ mean() {
       (( sum+=$num ))
       (( count+=1 ))
     done
+
     #use formula for proper rounding
-    mean=$(( ($sum + ($count / 2)) / $count ))
+    #(sum + (count/2)*( (sum>0)*2-1 )) / count
+    ((x=$count / 2))
+    ((y=$sum > 0))
+    ((y=$y * 2 - 1))
+    ((z=$x * $y + $sum))
+    ((mean=$z / $count))
     #format result in matrix format
     if [ "$result" == '' ]; then
       result=$mean
@@ -123,8 +129,7 @@ mean() {
       result=$result'\t'$mean
     fi
   done <<< $tranMatrix
-  result=$result'\n'
-  printf $result
+  echo -e "$result"
 }
 
 add() {
