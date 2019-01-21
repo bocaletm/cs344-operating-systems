@@ -145,6 +145,7 @@ add() {
   #check if the operation is valid
   if [ "$dims1" != "$dims2" ]; then
     echo Error. Matrixes cannot be added. Exiting now... 1>&2
+    exit 1
   fi
   arr=($dims1)
   rows=${arr[0]}
@@ -202,9 +203,11 @@ multiply() {
   #use dims to get the column and row counts
   dims1=$(echo "$matrix1" | dims)
   dims2=$(echo "$matrix2" | dims)
+
   #check if the operation is valid
   if [ "$dims1" != "$dims2" ]; then
-    echo Error. Matrixes cannot be added. Exiting now... 1>&2
+    echo Error. Matrixes cannot be multiplied. Exiting now... 1>&2
+    exit 1
   fi
 
   arr=($dims1)
