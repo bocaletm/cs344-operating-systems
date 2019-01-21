@@ -133,6 +133,7 @@ add() {
     else
       echo Error. Cannot find both $1 and $2. Exiting now... 1>&2
       exit 1
+    fi
   else
     echo Error. Invalid number of arguments. Exiting now... 1>&2
     exit 1
