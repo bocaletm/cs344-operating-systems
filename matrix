@@ -50,6 +50,7 @@ dims() {
     ((columns++)) 
   done
   printf "$rows $columns\n"
+  exit 0
 }
 
 transpose() {
@@ -79,7 +80,7 @@ transpose() {
     row=${row%?}
     echo "$row"
   done
-
+  exit 0
 }
 
 mean() {
@@ -130,6 +131,7 @@ mean() {
     fi
   done <<< $tranMatrix
   echo -e "$result"
+  exit 0
 }
 
 add() {
@@ -176,7 +178,7 @@ add() {
   colCount=$cols
   for ((j=0; j < $count; j++)); do
     #add the numbers
-    sum=$(expr ${matrix1[$idx]} + ${matrix1[$idx]})
+    sum=$((${matrix1[$idx]}+${matrix2[$idx]}))
     #format back into rows and columns
     if [ "$result" == '' ]; then
       result=$sum
@@ -190,7 +192,9 @@ add() {
     ((colCount--))
   done
   result=$result'\n'
-  printf $result
+  #print argument interpreting escapes
+  printf '%b' $result
+  exit 0
 }
 
 multiply() {
@@ -239,21 +243,24 @@ multiply() {
   colCount=$cols
   for ((j=0; j < $count; j++)); do
     #add the numbers
-    sum=$(expr ${matrix1[$idx]} \* ${matrix1[$idx]})
+    num1=${matrix1[$idx]}
+    num2=${matrix2[$idx]}
+    ((mult=$num1*$num2))
     #format back into rows and columns
     if [ "$result" == '' ]; then
-      result=$sum
+      result=$mult
     elif [ $colCount -gt 0 ]; then
-      result=$result'\t'$sum
+      result=$result'\t'$mult
     else
-      result="$result"'\n'$sum
+      result="$result"'\n'$mult
       colCount=$cols
     fi
     ((idx++))
     ((colCount--))
   done
   result=$result'\n'
-  printf $result
+  printf '%b' $result
+  exit 0
 }
 
 ##check for empty matrix
@@ -272,5 +279,4 @@ multiply() {
 
 #call the functions
 $1 "${@:2}"
-
 
