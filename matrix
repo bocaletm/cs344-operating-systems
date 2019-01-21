@@ -31,7 +31,7 @@ dims() {
   if [ "$#" -eq 0 ]; then
     matrix=$(cat)
   elif [ "$#" -eq 1 ]; then
-    if [ -f $1 ]; then
+    if [ -r $1 ]; then
       matrix=$(cat $1)
     else
       echo Error. No file by name $1. 1>&2
@@ -57,7 +57,7 @@ transpose() {
   if [ "$#" -eq 0 ]; then
     matrix=$(cat)
   elif [ "$#" -eq 1 ]; then
-    if [ -f $1 ]; then
+    if [ -r $1 ]; then
       matrix=$(cat $1)
     else
       echo Error. No file by name $1. 1>&2
@@ -84,7 +84,7 @@ mean() {
   if [ "$#" -eq 0 ]; then
     matrix=$(cat)
   elif [ "$#" -eq 1 ]; then
-    if [ -f $1 ]; then
+    if [ -r $1 ]; then
       matrix=$(cat $1)
     else
       echo Error. No file by name $1. 1>&2
@@ -127,7 +127,7 @@ mean() {
 add() {
   #get the matrixes into variables
   if [ "$#" -eq 2 ]; then
-    if [ -f $1 ] & [ -f $2 ]; then
+    if [ -r $1 ] & [ -f $2 ]; then
       matrix1=$(cat $1)
       matrix2=$(cat $2)
     else
@@ -187,7 +187,7 @@ add() {
 multiply() {
   #get the matrixes into variables
   if [ "$#" -eq 2 ]; then
-    if [ -f $1 ] & [ -f $2 ]; then
+    if [ -r $1 ] & [ -r $2 ]; then
       matrix1=$(cat $1)
       matrix2=$(cat $2)
     else
