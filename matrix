@@ -58,6 +58,7 @@ transpose() {
   if [ "$#" -eq 0 ]; then
     matrix=$(cat)
   elif [ "$#" -eq 1 ]; then
+      #check  if file can be read
     if [ -r $1 ]; then
       matrix=$(cat $1)
     else
@@ -88,6 +89,7 @@ mean() {
   if [ "$#" -eq 0 ]; then
     matrix=$(cat)
   elif [ "$#" -eq 1 ]; then
+      #check if file can be read
     if [ -r $1 ]; then
       matrix=$(cat $1)
     else
@@ -137,7 +139,8 @@ mean() {
 add() {
   #get the matrixes into variables
   if [ "$#" -eq 2 ]; then
-    if [ -r $1 ] & [ -f $2 ]; then
+      #check if both files can be read
+    if [ -r $1 ] & [ -r $2 ]; then
       matrix1=$(cat $1)
       matrix2=$(cat $2)
     else
@@ -191,15 +194,17 @@ add() {
     ((idx++))
     ((colCount--))
   done
+
   result=$result'\n'
   #print argument interpreting escapes
-  printf '%b' $result
+  printf '%b' "$result"
   exit 0
 }
 
 multiply() {
   #get the matrixes into variables
   if [ "$#" -eq 2 ]; then
+      #check if files can be read
     if [ -r $1 ] & [ -r $2 ]; then
       matrix1=$(cat $1)
       matrix2=$(cat $2)
@@ -215,67 +220,63 @@ multiply() {
   #use dims to get the column and row counts
   dims1=$(echo "$matrix1" | dims)
   dims2=$(echo "$matrix2" | dims)
+ 
+   #get the rows and columns
+  arr=($dims1)
+  arr2=($dims2)
+  rows=${arr[0]}
+  rows2=${arr2[0]}
+  cols=${arr[1]}
+  count=$(expr $rows \* $cols)
 
   #check if the operation is valid
-  if [ "$dims1" != "$dims2" ]; then
+  if [ "$cols" != "$rows2" ]; then
     echo Error. Matrixes cannot be multiplied. Exiting now... 1>&2
     exit 1
   fi
 
-  arr=($dims1)
-  rows=${arr[0]}
-  cols=${arr[1]}
-  count=$(expr $rows \* $cols)
-  sum=0
+  #transpose the second matrix to make traversing columns easier
+  matrix2=$(echo "$matrix2" | transpose)
 
-  #use echo to trim all the whitespace to make array conversion easier
-  matrix1=$(echo $matrix1)
-  matrix2=$(echo $matrix2)
+  #multiply the matrices
+  result='' 
+  while read -r line1; do
+    while read -r line2; do
+        mul=0
+        sum=0
+        #convert matrices to arrays for easy indexing
+        line1Arr=($line1)
+        line2Arr=($line2)
+        for ((i=0; i < $rows; i++)); do
+            x=${line1Arr[i]}
+            y=${line2Arr[i]}
+            #don't multiply by zero
+            if [[ "$x" -ne "0" ]] && [[ "$y" -ne "0" ]]; then
+                mul=$(($x * $y))
+                sum=$(($sum + $mul))
+            fi
+        done
+        result=$result$sum'\t'
+    done <<< $matrix2
+    #replace trailing tab with newline
+    result=${result%?}
+    result=${result%?}
+    result="$result"'\n'
+  done <<< $matrix1
 
-  #convert the strings to arrays
-  matrix1=($matrix1)
-  matrix2=($matrix2)
-  
-  #perform additions
-  idx=0
-  result=''
-
-  colCount=$cols
-  for ((j=0; j < $count; j++)); do
-    #add the numbers
-    num1=${matrix1[$idx]}
-    num2=${matrix2[$idx]}
-    ((mult=$num1*$num2))
-    #format back into rows and columns
-    if [ "$result" == '' ]; then
-      result=$mult
-    elif [ $colCount -gt 0 ]; then
-      result=$result'\t'$mult
-    else
-      result="$result"'\n'$mult
-      colCount=$cols
-    fi
-    ((idx++))
-    ((colCount--))
-  done
-  result=$result'\n'
-  printf '%b' $result
+  #print argument interpreting escapes
+  printf '%b' "$result"
   exit 0
 }
 
-##check for empty matrix
-#if [[ $matrix == "" ]]; then
-#    echo No matrix passed. Exiting now... 1>&2
-#    exit 1
-#fi
-#
+# PLEASE IGNORE
+# extra validation not in the requirements (decided to leave out)
 ##check for non integer input
 #nonIntegers=$(cat $matrix | grep -v [1-9])
 #if [[ $nonIntegers != "" ]]; then
 #    echo Invalid matrix. Some elements are not integers. Exiting now... 1>&2
 #    exit 1
 #fi
-#
 
 #call the functions
 $1 "${@:2}"
