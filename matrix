@@ -100,7 +100,7 @@ mean() {
     echo Error. Invalid number of arguments. Exiting now... 1>&2
     exit 1
   fi
-
+  
   #use dims to get the column count
   dims=$(echo "$matrix" | dims)
   arr=($dims)
@@ -109,6 +109,7 @@ mean() {
   #use transpose to traverse each column more easily in row form 
   tranMatrix=$(echo "$matrix" | transpose)
   result=''
+
   #process the transposed matrix line by line
   while read -r line; do
     count=0
@@ -117,7 +118,6 @@ mean() {
       (( sum+=$num ))
       (( count+=1 ))
     done
-
     #use formula for proper rounding
     #(sum + (count/2)*( (sum>0)*2-1 )) / count
     ((x=$count / 2))
@@ -131,7 +131,7 @@ mean() {
     else
       result=$result'\t'$mean
     fi
-  done <<< $tranMatrix
+  done <<< "$tranMatrix"
   echo -e "$result"
   exit 0
 }
@@ -257,12 +257,12 @@ multiply() {
             fi
         done
         result=$result$sum'\t'
-    done <<< $matrix2
+    done <<< "$matrix2"
     #replace trailing tab with newline
     result=${result%?}
     result=${result%?}
     result="$result"'\n'
-  done <<< $matrix1
+  done <<< "$matrix1"
 
   #print argument interpreting escapes
   printf '%b' "$result"
