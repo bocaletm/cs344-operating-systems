@@ -8,19 +8,29 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
+#include <fcntl.h>
 
-#define LOBBY "lobby"
-#define CAFE "cafe"
-#define BANK "bank"
-#define RESTROOM "restroom"
-#define OFFICE "office"
-#define COFFEE "coffee"
-#define LOUNGE "lounge"
-#define POOL "pool"
-#define ELEVATOR "elevator"
-#define HELIPAD "helipad"
+#define NUM_ROOMS 10
+const char* const ROOMS[] = {"lobby", "cafe", "bank", "restroom", "office", "garage", "lounge", "pool", "elevator", "helipad"};
 
+/**************************
+ * shuffle()
+ * Fisher-Yates algorithm to
+ * create random permutations of
+ * indices to the rooms array
+ * ************************/
+void shuffle(int* numsArray) {
+  srand(time(NULL));
+  int i;
+  for (i = NUM_ROOMS - 1; i > 0; i--) {
+    int randIdx = rand() % (i+1);
+    int temp = numsArray[i];
+    numsArray[i] = numsArray[randIdx];
+    numsArray[randIdx] = temp;
+  } 
+}
 /**************************
  * createRoomFiles()
  * This function generates text files
@@ -28,7 +38,24 @@
  * ************************/
 
 int createRoomFiles(){
-    return 0;
+  const int roomsToCreate = 7;
+  /*get random room indexes from global array*/
+  int* numsArray = 0;
+  numsArray = malloc(NUM_ROOMS * sizeof(int)); 
+  int i;
+  for (i = 0; i < NUM_ROOMS; i++) {
+    numsArray[i] = i;
+  }
+  shuffle(numsArray);
+
+  /*create the files*/
+  int file_descriptor;
+  for (i = 0; i < roomsToCreate; i++) {
+    printf("creating %s\n",ROOMS[numsArray[i]]);
+    file_descriptor = open(ROOMS[numsArray[i]], O_WRONLY | O_CREAT, 0600);
+  }
+  free(numsArray);
+  return 0;
 }
 
 /**************************
@@ -75,5 +102,6 @@ int createDirectory(){
 int main()
 {
     int directory = createDirectory();
-    return directory;
+    int files = createRoomFiles();
+    return 0;
 }
