@@ -37,7 +37,7 @@ void shuffle(int* numsArray) {
  * representing rooms
  * ************************/
 
-int createRoomFiles(){
+int createRoomFiles(char* dirName){
   const int roomsToCreate = 7;
   /*get random room indexes from global array*/
   int* numsArray = 0;
@@ -50,9 +50,18 @@ int createRoomFiles(){
 
   /*create the files*/
   int file_descriptor;
+  char* tempStrPtr = 0;
+  const int tempStrLength = 60;
   for (i = 0; i < roomsToCreate; i++) {
+    tempStrPtr = malloc(tempStrLength * sizeof(char));
+    if (tempStrPtr == 0) {
+      printf("Malloc error in temp directory string");
+      return 1;
+    }
+    tempStrPtr = strcat(dirName,ROOMS[numsArray[i]]);
     printf("creating %s\n",ROOMS[numsArray[i]]);
-    file_descriptor = open(ROOMS[numsArray[i]], O_WRONLY | O_CREAT, 0600);
+    /*file_descriptor = open(tempStrPtr, O_WRONLY | O_CREAT, 0600);*/
+    free(tempStrPtr);
   }
   free(numsArray);
   return 0;
@@ -77,21 +86,11 @@ int addConnections() {
 int addTypes() {
     return 0;
 }
-int createDirectory(){
-    /*set the dir name*/
-    char* dirName = 0;
-    const int dirNameLength = 25;
-    dirName = malloc(dirNameLength * sizeof(char));
-    if (dirName == 0) {
-        printf("Error. Could not create directory name.\n");
-        return 1;
-    }
-    memset(dirName,'\0',dirNameLength);
 
+int createDirectory(char* dirName){
     /*add the process ID to the name */
     sprintf(dirName,"bocaletm.rooms.%d",getpid());
     int result = mkdir(dirName,0755);
-    free(dirName);
     if (result != 0){
         printf("Error creating directory...\n");
         return 1;
@@ -101,7 +100,17 @@ int createDirectory(){
 
 int main()
 {
-    int directory = createDirectory();
-    int files = createRoomFiles();
+     /*set the dir name*/
+    char* dirName = 0;
+    const int dirNameLength = 50;
+    dirName = malloc(dirNameLength * sizeof(char));
+    if (dirName == 0) {
+        printf("Error. Could not create directory name.\n");
+        return 1;
+    }
+    memset(dirName,'\0',dirNameLength);
+    int directory = createDirectory(dirName);
+    int files = createRoomFiles(dirName);
+    free(dirName);
     return 0;
 }
