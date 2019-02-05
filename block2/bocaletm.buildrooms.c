@@ -84,7 +84,7 @@ int createRoomFiles(char* dirName,char** filepaths,int* createdRooms){
   int file_descriptor;
   int i;
   for (i = 0; i < ROOMS_TO_CREATE; i++) {
-    memset(tempStrPtr,'\0',strlen(tempStrPtr));
+    memset(tempStrPtr,'\0',tempStrLength);
     sprintf(tempStrPtr,"%s/%s",dirName,ROOMS[numsArray[i]]);
     file_descriptor = open(tempStrPtr, O_WRONLY | O_CREAT, 0600);
     if (file_descriptor < 0) {
@@ -93,7 +93,7 @@ int createRoomFiles(char* dirName,char** filepaths,int* createdRooms){
     }
 
     /*save the path to the files*/
-    filepaths[i] = malloc(strlen(tempStrPtr) * sizeof(char));
+    filepaths[i] = malloc(tempStrLength * sizeof(char));
     if (filepaths[i] == 0) {
         printf("Malloc error on %s\n", tempStrPtr);
         return filepathCount;
@@ -101,8 +101,10 @@ int createRoomFiles(char* dirName,char** filepaths,int* createdRooms){
         filepathCount++;
     }
     
-    memset(filepaths[i],'\0',strlen(tempStrPtr));
+    memset(filepaths[i],'\0',tempStrLength);
     strcpy(filepaths[i],tempStrPtr);
+
+    printf("filepath %d: %s\n",i,filepaths[i]);
 
     /*write the name to the files*/
     memset(tempStrPtr,'\0',strlen(tempStrPtr));
@@ -125,8 +127,8 @@ int createRoomFiles(char* dirName,char** filepaths,int* createdRooms){
  * connect()
  * This function connects two rooms 
  * ************************/
-void connect() {
-
+void connect(int a, int b) {
+  printf("Connecting room %s to room %s\n", ROOMS[a], ROOMS[b]);
 }
 /**************************
  * addConnections()
@@ -152,17 +154,18 @@ int addConnections(char** filepaths,int* createdRooms) {
     }
     
     int idx;
-    /*iterate through the random rooms and create connections*/
+    /*iterate through the created rooms and 
+     * create connections to random rooms*/
     for (i = 0; i < ROOMS_TO_CREATE; i++) {
-        idx = 0;
-        while (connections[i] < 3) {
-            if (idx == i) {
-               idx++;
-               continue;
-            } else {
-
-
+      idx = 0;
+      while (connections[i] < 3) { 
+        if (createdRooms[i] != randomRoomsPtr[idx] && connections[idx] < 6) {
+         connect(createdRooms[i],randomRoomsPtr[idx]);
+         connections[i]++;
+         connections[idx]++;
         }
+        idx++; 
+      }
     }
     return 0;
 }
@@ -188,7 +191,7 @@ int addTypes(char** filepaths) {
     /*open file to write*/
         file_descriptor = open(filepaths[i], O_WRONLY | O_APPEND);
         if (file_descriptor < 0) {
-            printf("Error. Could not open %s\n",filepaths[i]);
+            printf("Error in addTypes(). Could not open %s\n",filepaths[i]);
             return 1;
         }
         /*Assign the room type: start, end, mid */
@@ -212,13 +215,16 @@ int addTypes(char** filepaths) {
 
 void createDirectory(char* dirName){
     /*add the process ID to the name */
-    sprintf(dirName,"bocaletm.rooms.%d",getpid());
-    int result = mkdir(dirName,0755);
-    if (result != 0){
-        printf("mkdir error\n");
-        perror("In createDirectory()");
-        exit(1);
-    }
+  pid_t process_id;
+  process_id = getpid();
+  printf("process ID is %d\n",process_id);
+  sprintf(dirName,"bocaletm.rooms.%d",process_id);
+  int result = mkdir(dirName,0755);
+  if (result != 0){
+      printf("mkdir error\n");
+      perror("In createDirectory()");
+      exit(1);
+  }
 }
 
 int main()
