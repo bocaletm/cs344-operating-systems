@@ -127,8 +127,50 @@ int createRoomFiles(char* dirName,char** filepaths,int* createdRooms){
  * connect()
  * This function connects two rooms 
  * ************************/
-void connect(int a, int b) {
-  printf("Connecting room %s to room %s\n", ROOMS[a], ROOMS[b]);
+void connect(int a, int b, char* dirName) {
+  /*temp string to hold string to print*/
+    char* tempStrPtr = 0;
+    const int tempStrLength = 60;
+    tempStrPtr = malloc(tempStrLength * sizeof(char));
+    if (tempStrPtr == 0) {
+        printf("Malloc error in temp connection string in connect()\n");
+        exit(1);
+    }
+
+    /*temp string to hold filepath*/
+    char* tempFilePtr = 0;
+    tempFilePtr = malloc(tempStrLength * sizeof(char));
+    if (tempFilePtr == 0) {
+        printf("Malloc error in temp filepath string in connect()\n");
+        exit(1);
+    }
+
+    /*add connection to a*/
+    memset(tempFilePtr,'\0',tempStrLength);
+    memset(tempStrPtr,'\0',tempStrLength); 
+
+    sprintf(tempStrPtr,"CONNECTION %d: %s\n",idx,ROOMS[a]);
+    sprintf(tempFilePtr,"%s/%s",dirName,ROOMS[a]);
+    int file_descriptor;
+    file_descriptor = open(tempFilePtr, O_WRONLY | O_APPEND, 0600); 
+    if (file_descriptor < 0) {
+          printf("Could not write to %s\n", tempFilePtr);
+          exit(1);
+    }
+    write(file_descriptor,tempStrPtr,strlen(tempStrPtr) * sizeof(char));
+
+    /*add connection to b*/
+    memset(tempFilePtr,'\0',tempStrLength);
+    memset(tempStrPtr,'\0',tempStrLength); 
+
+    sprintf(tempStrPtr,"CONNECTION %d: %s\n",idx,ROOMS[b]);
+    sprintf(tempFilePtr,"%s/%s",dirName,ROOMS[a]);
+    file_descriptor = open(tempFilePtr, O_WRONLY | O_APPEND, 0600); 
+    if (file_descriptor < 0) {
+          printf("Could not write to  %s\n", tempFilePtr);
+          exit(1);
+    }
+    write(file_descriptor,tempStrPtr,strlen(tempStrPtr) * sizeof(char));
 }
 /**************************
  * addConnections()
@@ -136,7 +178,7 @@ void connect(int a, int b) {
  * to other rooms in the files
  * ************************/
 
-int addConnections(char** filepaths,int* createdRooms) {
+int addConnections(char* dirName,int* createdRooms) {
     int* randomRoomsPtr = 0;
     randomRoomsPtr = malloc(ROOMS_TO_CREATE * sizeof(int)); 
     if (randomRoomsPtr == 0) {
@@ -160,9 +202,9 @@ int addConnections(char** filepaths,int* createdRooms) {
       idx = 0;
       while (connections[i] < 3) { 
         if (createdRooms[i] != randomRoomsPtr[idx] && connections[idx] < 6) {
-         connect(createdRooms[i],randomRoomsPtr[idx]);
-         connections[i]++;
-         connections[idx]++;
+          connections[i]++;
+          connections[idx]++;
+          connect(createdRooms[i],randomRoomsPtr[idx],i+1,dirName);
         }
         idx++; 
       }
@@ -263,7 +305,7 @@ int main()
    
         /*add connections*/
     if (filepathCount == ROOMS_TO_CREATE) {
-        addConnections(filepaths,createdRooms);
+        addConnections(dirName,createdRooms);
     } 
 
     /*add types*/
