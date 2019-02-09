@@ -27,6 +27,7 @@ typedef struct  {
 typedef struct {
   int steps;
   int idx;
+  Room** rooms;
   char** path;
 } Game; 
 
@@ -72,8 +73,8 @@ void getDir(char* dirName) {
   }
   closedir(dirToCheck);
   /*copy newestDirName to parameter*/
-  printf("new dir name: %s", newestDirName);
-  memcpy(dirName,newestDirName,256 * sizeof(char));
+  memset(dirName,'\0',sizeof(dirName));
+  sprintf(dirName,"./%s",newestDirName);
 }
 /*********************
  * findStart(): finds the room
@@ -85,19 +86,42 @@ void findStart(char* filepath) {
   dirName = malloc(256 * sizeof(char));
   checkMem(dirName);
   getDir(dirName);
-  printf("dirname:%s\n");
 
-  /*set filepath of start room*/
-
-  /*get first room name*/
-
-  /*append room name to directory*/
-
-  /*open file*/
-
-  /*check file type*/
-
-  /*set filepath*/
+  /*set vars*/
+  char tempFilepath[256];
+  char readBuffer[256];
+  DIR* dirToCheck;
+  struct dirent *fileInDir;
+  struct stat dirAttributes;
+  int file_descriptor = 0;
+  int nread = 0;
+  /*check present directory*/
+  dirToCheck = opendir(dirName);
+  if (dirToCheck > 0) {
+    while ((fileInDir = readdir(dirToCheck)) != NULL) {
+      memset(readBuffer,'\0',sizeof(readBuffer));
+      memset(tempFilepath,'\0',sizeof(tempFilepath));
+      /*get the file path*/
+      sprintf(tempFilepath,"%s/%s",dirName,fileInDir->d_name);
+      /*open the file*/
+      file_descriptor = open(tempFilepath, O_RDONLY, 0600);
+      if (file_descriptor < 0) {
+        printf("Could not read %s\n",tempFilepath);
+        exit(1);
+      }
+      /*go to end of file*/
+      lseek(file_descriptor,-11,SEEK_END);
+      /*read the last chars in last line*/
+      nread = read(file_descriptor,readBuffer,sizeof(readBuffer));
+      if (strstr(readBuffer,"START")) {
+        strcpy(filepath,tempFilepath);
+      }
+    }
+  } else {
+    printf("Error. Could not open directory %s.\n",dirName);
+    exit(1);
+  }
+  closedir(dirToCheck);
 }
 
 /*********************
@@ -142,7 +166,8 @@ int main() {
   char* filepath = 0;
   filepath = malloc(50 * sizeof(char));
   checkMem(filepath);
-
   findStart(filepath);
+
+
 }
 

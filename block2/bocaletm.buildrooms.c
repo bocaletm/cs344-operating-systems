@@ -14,7 +14,7 @@
 
 #define NUM_ROOMS 10
 #define ROOMS_TO_CREATE 7
-const char* const ROOMS[] = {"lobby", "cafe", "bank", "restroom", "office", "garage", "lounge", "pool", "elevator", "helipad"};
+const char* const ROOMS[] = {"lobby", "caffe", "bank_", "restr", "offic", "garag", "loung", "pool_", "eleva", "helip"};
 const char* const ROOM_TYPES[] = {"START_ROOM","MID_ROOM","END_ROOM"};
 
 /**************************
