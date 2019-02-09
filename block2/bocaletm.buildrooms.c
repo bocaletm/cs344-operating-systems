@@ -196,16 +196,36 @@ int addConnections(char* dirName,int* createdRooms) {
     for (i = 0; i < NUM_ROOMS; i++) {
         connections[i] = 0;
     }
-    
+
+     /**the indices of the rooms each connected to */
+    int connectionsArr[NUM_ROOMS][NUM_ROOMS];
+    int m;
+    int n;
+    for (m = 0; m < NUM_ROOMS; m++) {
+      for (n = 0; n < NUM_ROOMS; n++) {
+        connectionsArr[m][n] = -1;
+      }
+    }
+   
     int idx;
     /*iterate through the created rooms and 
      * create connections to random rooms*/
     for (i = 0; i < ROOMS_TO_CREATE; i++) {
       idx = 0;
-      while (connections[createdRooms[i]] < 3) { 
+      while (connections[createdRooms[i]] < 3) {
         if (createdRooms[i] != randomRoomsPtr[idx] && connections[randomRoomsPtr[idx]] < 6) {
+          if (connectionsArr[createdRooms[i]][randomRoomsPtr[idx]] == 1) {
+              printf("%s already connected to %s\n", ROOMS[createdRooms[i]],ROOMS[randomRoomsPtr[idx]]);
+          }
+          /*keep track of connections to avoid dupes*/
+          connectionsArr[createdRooms[i]][randomRoomsPtr[idx]] = 1;
+          connectionsArr[randomRoomsPtr[idx]][createdRooms[i]] = 1;
+
+          /*keep track of number of connections*/
           connections[createdRooms[i]]++;
           connections[randomRoomsPtr[idx]]++;
+
+          /*print connections to files*/
           connect(createdRooms[i],randomRoomsPtr[idx],connections[createdRooms[i]],connections[randomRoomsPtr[idx]],dirName);
         }
         idx++; 
