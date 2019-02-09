@@ -34,9 +34,9 @@ typedef struct {
  * checkMem(): checks if malloc
  * succeeded
  * ******************/
-checkMem(char* ptr,char** function) {
+checkMem(char* ptr) {
   if (ptr == 0) {
-      printf("Malloc error in %s\n",function);
+      printf("Malloc error.");
       exit(1);
   }
 }
@@ -45,18 +45,36 @@ checkMem(char* ptr,char** function) {
  * getDir(): finds newest directory
  * *******************/
 void getDir(char* dirName) {
-  DIR* dirPtr = 0;
-  struct dirent* entityPtr = 0;
-  dirPtr = opendir("./");
-  if (dirPtr != NULL) {
-    while(entityPtr == readdir(dirPtr)){
-      puts(entityPtr->d_name);
-      printf("%s\n",entityPtr->d_name);
+  /*set vars*/
+  int newestDirTime = -1;
+  char dirPrefix[32] = "bocaletm.rooms.";
+  char newestDirName[256];
+  memset(newestDirName,'\0',sizeof(newestDirName));
+  DIR* dirToCheck;
+  struct dirent *fileInDir;
+  struct stat dirAttributes;
+  /*check present directory*/
+  dirToCheck = opendir(".");
+  if (dirToCheck > 0) {
+    while ((fileInDir = readdir(dirToCheck)) != NULL) {
+      if (strstr(fileInDir->d_name,dirPrefix)) {
+        stat(fileInDir->d_name,&dirAttributes);
+        if ((int)dirAttributes.st_mtime > newestDirTime) {
+          newestDirTime = (int)dirAttributes.st_mtime;
+          memset(newestDirName,'\0',sizeof(newestDirName));
+          strcpy(newestDirName,fileInDir->d_name);
+        }
+      }
     }
-    (void) closedir(dirPtr);
+  } else {
+    printf("Error. Could not open present directory.\n");
+    exit(1);
   }
+  closedir(dirToCheck);
+  /*copy newestDirName to parameter*/
+  printf("new dir name: %s", newestDirName);
+  memcpy(dirName,newestDirName,256 * sizeof(char));
 }
-
 /*********************
  * findStart(): finds the room
  * to start the game. Edits path to file
@@ -64,9 +82,10 @@ void getDir(char* dirName) {
 void findStart(char* filepath) {
   /*find newest directory*/
   char* dirName = 0;
-  dirName = malloc(25 * sizeof(char));
-  checkMem(dirName,"findStart()");
+  dirName = malloc(256 * sizeof(char));
+  checkMem(dirName);
   getDir(dirName);
+  printf("dirname:%s\n");
 
   /*set filepath of start room*/
 
@@ -118,11 +137,11 @@ int main() {
   newGame.steps = 0;
   newGame.idx = 0;
   newGame.path = malloc(CREATED_ROOMS * sizeof(char*));
-  checkMem(newGame.path,"main()");
+  checkMem(newGame.path);
 
   char* filepath = 0;
   filepath = malloc(50 * sizeof(char));
-  checkMem(filepath,"main()");
+  checkMem(filepath);
 
   findStart(filepath);
 }
