@@ -1,13 +1,20 @@
 CC = gcc
 CFLAGS = -g -Wall -std=c89
 
-test : bocaletm.buildrooms.c
+bld : bocaletm.buildrooms.c
 	$(CC) $(CFLAGS) -o $@ $^
 
-memcheckTest : 
-	valgrind --leak-check=yes --show-reachable=yes ./test
+adv : bocaletm.adventure.c
+	$(CC) $(CFLAGS) -o $@ $^
+
+memcheckBld : 
+	valgrind --leak-check=yes --show-reachable=yes ./bld
+
+memcheckAdv : 
+	valgrind --leak-check=yes --show-reachable=yes ./adv
 
 clean :
 	-rm *.o
-	-rm test
+	-rm bld
+	-rm adv
 	-find . -type d -name "bocaletm*" -exec rm -r "{}" \;
