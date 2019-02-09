@@ -213,10 +213,8 @@ int addConnections(char* dirName,int* createdRooms) {
     for (i = 0; i < ROOMS_TO_CREATE; i++) {
       idx = 0;
       while (connections[createdRooms[i]] < 3) {
-        if (createdRooms[i] != randomRoomsPtr[idx] && connections[randomRoomsPtr[idx]] < 6) {
-          if (connectionsArr[createdRooms[i]][randomRoomsPtr[idx]] == 1) {
-              printf("%s already connected to %s\n", ROOMS[createdRooms[i]],ROOMS[randomRoomsPtr[idx]]);
-          }
+        if (createdRooms[i] != randomRoomsPtr[idx] && connections[randomRoomsPtr[idx]] < 6 && connectionsArr[createdRooms[i]][randomRoomsPtr[idx]] != 1) {
+          
           /*keep track of connections to avoid dupes*/
           connectionsArr[createdRooms[i]][randomRoomsPtr[idx]] = 1;
           connectionsArr[randomRoomsPtr[idx]][createdRooms[i]] = 1;
