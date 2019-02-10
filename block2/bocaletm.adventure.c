@@ -15,12 +15,11 @@
 #include <fcntl.h>
 
 #define CREATED_ROOMS 7
+#define NUM_ROOMS 10
 const char* const ROOMS[] = {"lobby", "cafe", "bank", "restroom", "office", "garage", "lounge", "pool", "elevator", "helipad"};
 
 typedef struct {
   int steps;
-  int room_idx;
-  char** rooms;
   char** path;
 } Game; 
 
@@ -118,12 +117,6 @@ void findStartEnd(char* start_filepath, char* end_filepath) {
   closedir(dirToCheck);
 }
 
-/*********************
- * getNextRoom(): reads the room
- *********************/
-void getNextRoom(char* filepath, Game* newGame) {
-  
-}
 
 /*********************
  * printRoom(): prints the room
@@ -134,6 +127,7 @@ void printRoom(char* selection_filepath) {
   file_ptr = fopen(selection_filepath,"r");
   if (file_ptr == 0) {
     printf("Could not open file %s\n",selection_filepath);
+    exit(1);
   }
   int nameLength = 6;
   /*read the name of the room*/
@@ -145,33 +139,50 @@ void printRoom(char* selection_filepath) {
   /*read rest of line*/
   fgets(name,nameLength,file_ptr);
   printf("CURRENT LOCATION: %s\n",name);
-
-  /*find out how many connections to read*/
-  int connections = 3;
-  /*move to next connection*/
-  int buffSize = 20;
+  
+  char** connections = 0;
+  connections = malloc(CREATED_ROOMS * sizeof(char));
+  char* tempStr = 0;
+  int numConnections = 0;
+  int tempStrLength = 7;
+  /*read connections*/
+  int buffSize = 100;
   int i;
   char data[buffSize];
-  char* token = 0;
-  char full_token[20];
+  
   printf("POSSIBLE CONNECTIONS: ");
   memset(data,'\0',sizeof(data));
   while (fgets(data,buffSize,file_ptr)) {
-    for (i = 1; i <= connections; i++) {
-      memset(full_token,'\0',sizeof(full_token));
-      sprintf(full_token,"CONNECTION %d",i);
-      token = strtok(data,full_token);
-      printf("%s",token);
+    char* token = strtok(data," ");
+    if (strcmp(token,"CONNECTION") == 0) {
+      token = strtok(NULL," ");
+      token = strtok(NULL,"\n");
+    }
+    if (strstr(token,"ROOM") == 0) {
+      tempStr = malloc(tempStrLength * sizeof(char));
+      checkMem(tempStr);
+      memset(tempStr,'\0',(tempStrLength * sizeof(char)));
+      sprintf(tempStr,"%s",token);
+      connections[numConnections] = tempStr;
+      numConnections++;
     }
   }
-
-  /*read the connections*/
+  /*start at one to avoid empty string from tokenizer*/
+  for (i = 1; i < numConnections; i++) {
+    printf("%s",connections[i]);
+    if (i != numConnections - 1) {
+      printf(", ");
+    } else {
+      printf(".\n");
+    }
+  }
+  getInput(connections,numConnections,newGame);
 }
 
 /*********************
  * getInput(): gets user selection 
  *********************/
-void getInput(char* input) {
+void getInput(char** connections, int numConnections, Game* newGame) {
 
 }
 
