@@ -16,11 +16,15 @@
 
 #define CREATED_ROOMS 7
 #define NUM_ROOMS 10
-const char* const ROOMS[] = {"lobby", "cafe", "bank", "restroom", "office", "garage", "lounge", "pool", "elevator", "helipad"};
+#define MAX_RM_CHARS 5
+
+const char* const ROOMS[] = {"lobby", "caffe", "bank_", "restr", "offic", "garag", "loung", "pool_", "eleva", "helip"};
 
 typedef struct {
   int steps;
   char** path;
+  char** currConnections;
+  int currConnectionsCount;
 } Game; 
 
 /********************
@@ -116,12 +120,43 @@ void findStartEnd(char* start_filepath, char* end_filepath) {
   }
   closedir(dirToCheck);
 }
-
+/*********************
+ * getInput(): gets user selection 
+ *********************/
+void getInput(Game* newGame,char* roomInfo) {
+  int valid = 1;
+  int charsEntered = -5;
+  int currChar = -5;
+  size_t bufferSize = 0;
+  char* line = NULL;
+  while(valid > 0) {
+    valid = 0;
+    printf("WHERE TO? >");
+    charsEntered = getline(&line, &bufferSize, stdin);
+    if (charsEntered != MAX_RM_CHARS + 1) {
+      valid = 1;
+      printf("\nHUH? I DON’T UNDERSTAND THAT ROOM. TRY AGAIN.\n\n");
+      printf("%s",roomInfo);
+      continue;
+    }
+  }
+  printf("%s",line);
+  free(line); 
+  line = NULL; 
+}
 
 /*********************
  * printRoom(): prints the room
  *********************/
-void printRoom(char* selection_filepath) {
+void printRoom(char* selection_filepath, Game* newGame) {
+  /*store the output to display again in case of
+   * bad user input to avoid processing file again*/
+  char* output;
+  int outputSize = 256;
+  output = malloc(outputSize * sizeof(char));
+  checkMem(output);
+  memset(output,'\0',outputSize);
+
   FILE* file_ptr = 0;
   /*open the file*/
   file_ptr = fopen(selection_filepath,"r");
@@ -138,19 +173,18 @@ void printRoom(char* selection_filepath) {
   fseek(file_ptr,11,SEEK_SET);
   /*read rest of line*/
   fgets(name,nameLength,file_ptr);
-  printf("CURRENT LOCATION: %s\n",name);
+  sprintf(output,"CURRENT LOCATION: %s\nPOSSIBLE CONNECTIONS: ",name);
   
   char** connections = 0;
   connections = malloc(CREATED_ROOMS * sizeof(char));
   char* tempStr = 0;
   int numConnections = 0;
-  int tempStrLength = 7;
+  int tempStrLength = 10;
   /*read connections*/
   int buffSize = 100;
   int i;
   char data[buffSize];
   
-  printf("POSSIBLE CONNECTIONS: ");
   memset(data,'\0',sizeof(data));
   while (fgets(data,buffSize,file_ptr)) {
     char* token = strtok(data," ");
@@ -158,33 +192,33 @@ void printRoom(char* selection_filepath) {
       token = strtok(NULL," ");
       token = strtok(NULL,"\n");
     }
-    if (strstr(token,"ROOM") == 0) {
-      tempStr = malloc(tempStrLength * sizeof(char));
-      checkMem(tempStr);
-      memset(tempStr,'\0',(tempStrLength * sizeof(char)));
-      sprintf(tempStr,"%s",token);
-      connections[numConnections] = tempStr;
-      numConnections++;
+    for (i=0; i < NUM_ROOMS; i++) {
+      if (strcmp(token,ROOMS[i]) == 0) {
+        tempStr = malloc(tempStrLength * sizeof(char));
+        checkMem(tempStr);
+        memset(tempStr,'\0',tempStrLength);
+        strcpy(tempStr,token);
+        connections[numConnections] = tempStr;
+        numConnections++;
+      }
     }
   }
   /*start at one to avoid empty string from tokenizer*/
-  for (i = 1; i < numConnections; i++) {
-    printf("%s",connections[i]);
+  for (i = 0; i < numConnections; i++) {
+    sprintf(output,"%s%s",output,connections[i]);
     if (i != numConnections - 1) {
-      printf(", ");
+      sprintf(output,"%s, ",output);
     } else {
-      printf(".\n");
+      sprintf(output,"%s\n",output);
     }
   }
-  getInput(connections,numConnections,newGame);
+  printf("%s",output);
+  /*add connections and count to game struct*/
+  newGame->currConnections = connections;
+  newGame->currConnectionsCount = numConnections;
+  getInput(newGame,output);
 }
 
-/*********************
- * getInput(): gets user selection 
- *********************/
-void getInput(char** connections, int numConnections, Game* newGame) {
-
-}
 
 /*********************
  * endGame(): displays end of game
@@ -205,9 +239,10 @@ int main() {
     exit(1);
   }
   newGame->steps = 0;
-  newGame->room_idx = 0;
   newGame->path = malloc(CREATED_ROOMS * sizeof(char*));
   checkMem(*newGame->path);
+  newGame->currConnections = malloc(CREATED_ROOMS * sizeof(char*));
+  newGame->currConnectionsCount = 0;
 
   char* start_filepath = 0;
   start_filepath = malloc(50 * sizeof(char));
@@ -226,7 +261,7 @@ int main() {
   memset(selection_filepath,'\0',50 * sizeof(char));
   strcpy(selection_filepath,start_filepath);
   printf("start: %s select: %s\n",start_filepath,selection_filepath);
-  printRoom(selection_filepath);
+  printRoom(selection_filepath, newGame);
   int end = 0;
  /* while (end == 0) {
     printRoom(selection_filepath);
