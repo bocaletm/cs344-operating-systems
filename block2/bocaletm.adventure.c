@@ -63,7 +63,7 @@ void getDir(char* dirName) {
         if ((int)dirAttributes.st_mtime > newestDirTime) {
           newestDirTime = (int)dirAttributes.st_mtime;
           memset(newestDirName,'\0',sizeof(newestDirName));
-          strcpy(newestDirName,fileInDir->d_name);
+          strncpy(newestDirName,fileInDir->d_name,255);
         }
       }
     }
@@ -116,9 +116,9 @@ void findStartEnd(char* start_filepath, char* end_filepath, Game* newGame) {
       /*read the last chars in last line*/
       nread = read(file_descriptor,readBuffer,sizeof(readBuffer));
       if (strstr(readBuffer,"START")) {
-        strcpy(start_filepath,tempFilepath);
+        strncpy(start_filepath,tempFilepath,49);
       } else if (strstr(readBuffer,"END")) {
-        strcpy(end_filepath,tempFilepath);
+        strncpy(end_filepath,tempFilepath,49);
       }
     }
   } else {
@@ -134,7 +134,7 @@ void findStartEnd(char* start_filepath, char* end_filepath, Game* newGame) {
 void addToPath(Game* game,char* name) {
   game->path[game->path_idx] = malloc(MAX_RM_CHARS * sizeof(char));
   checkMem(game->path[game->path_idx],136);
-  strcpy(game->path[game->path_idx],name);
+  strncpy(game->path[game->path_idx],name,MAX_RM_CHARS - 1);
   game->path_idx++;
 }
 
@@ -229,7 +229,7 @@ void getRoom(Game* newGame) {
   sprintf(output,"CURRENT LOCATION: %s\nPOSSIBLE CONNECTIONS: ",name);
   
   char** connections = 0;
-  connections = malloc(CREATED_ROOMS * sizeof(char));
+  connections = malloc(CREATED_ROOMS * sizeof(char*));
   char* tempStr = 0;
   int numConnections = 0;
   int tempStrLength = 10;
@@ -254,7 +254,7 @@ void getRoom(Game* newGame) {
         tempStr = malloc(tempStrLength * sizeof(char));
         checkMem(tempStr,258);
         memset(tempStr,'\0',tempStrLength);
-        strcpy(tempStr,token);
+        strncpy(tempStr,token,tempStrLength -1);
         connections[numConnections] = tempStr;
         numConnections++;
       }
@@ -338,5 +338,10 @@ int main() {
     printf("\n");
   }
   endGame(newGame);
+
+  /*free memory*/
+  free(start_filepath);
+  free(end_filepath);
+  free(newGame->dirName);
 }
 
