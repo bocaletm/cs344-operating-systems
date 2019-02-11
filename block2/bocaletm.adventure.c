@@ -18,22 +18,26 @@
 #define NUM_ROOMS 10
 #define MAX_RM_CHARS 5
 
+/*list of possible rooms used to validate strtok output*/
 const char* const ROOMS[] = {"lobby", "caffe", "bank_", "restr", "offic", "garag", "loung", "pool_", "eleva", "helip"};
 
 typedef struct {
   int steps;
   char** path;
+  int path_idx;
   char** currConnections;
   int currConnectionsCount;
+  char* dirName;
+  char* nextRoom;
 } Game; 
 
 /********************
  * checkMem(): checks if malloc
  * succeeded
  * ******************/
-void checkMem(char* ptr) {
+void checkMem(char* ptr,int line) {
   if (ptr == 0) {
-      printf("Malloc error.");
+      printf("Malloc error in line %dish.",line);
       exit(1);
   }
 }
@@ -76,15 +80,18 @@ void getDir(char* dirName) {
  * findStart(): finds the room
  * to start the game. Edits path to file
  *********************/
-void findStartEnd(char* start_filepath, char* end_filepath) {
+void findStartEnd(char* start_filepath, char* end_filepath, Game* newGame) {
   /*find newest directory*/
   char* dirName = 0;
   dirName = malloc(256 * sizeof(char));
-  checkMem(dirName);
+  checkMem(dirName,87);
   getDir(dirName);
 
+  /*save directory in game struct*/
+  newGame->dirName = dirName;
+
   /*set vars*/
-  char tempFilepath[256];
+  char tempFilepath[50];
   char readBuffer[256];
   DIR* dirToCheck;
   struct dirent *fileInDir;
@@ -121,47 +128,93 @@ void findStartEnd(char* start_filepath, char* end_filepath) {
   closedir(dirToCheck);
 }
 /*********************
+ * addToPath(): adds a room name to the path
+ * in the game struct
+ *********************/
+void addToPath(Game* game,char* name) {
+  game->path[game->path_idx] = malloc(MAX_RM_CHARS * sizeof(char));
+  checkMem(game->path[game->path_idx],136);
+  strcpy(game->path[game->path_idx],name);
+  game->path_idx++;
+}
+
+/*********************
  * getInput(): gets user selection 
  *********************/
 void getInput(Game* newGame,char* roomInfo) {
-  int valid = 1;
+  int valid = 0;
   int charsEntered = -5;
-  int currChar = -5;
+  int idx = 0;
+  int i = 0;
   size_t bufferSize = 0;
   char* line = NULL;
-  while(valid > 0) {
-    valid = 0;
+  char nextChar = 0;
+  while(valid < 1) {
     printf("WHERE TO? >");
     charsEntered = getline(&line, &bufferSize, stdin);
     if (charsEntered != MAX_RM_CHARS + 1) {
-      valid = 1;
       printf("\nHUH? I DON’T UNDERSTAND THAT ROOM. TRY AGAIN.\n\n");
       printf("%s",roomInfo);
       continue;
+    } else {
+      
+      /*null terminate the input*/
+      idx = 0;
+      nextChar = line[idx];
+      while (nextChar != '\n'){
+        idx++;
+        nextChar = line[idx];
+      }
+      line[idx] = '\0';
+
+      /*check if one of the current room's connections was entered*/
+      for (i = 0; i < newGame->currConnectionsCount; i++) {
+        if (strcmp(newGame->currConnections[i],line) == 0) {
+          valid = 1;
+        }
+      }
+
+      /*print error msg if not*/
+      if (valid == 0) {
+        printf("\nHUH? I DON’T UNDERSTAND THAT ROOM. TRY AGAIN.\n\n");
+        printf("%s",roomInfo);
+      }
     }
   }
-  printf("%s",line);
+  /*set filepath to selection*/
+  char name[MAX_RM_CHARS + 1];
+  memset(name,'\0',sizeof(name));
+  /*clean out the rest of the buffer from the string*/
+  for (i = 0; i < MAX_RM_CHARS; i++) {
+    name[i] = line[i];
+  }
+  memset(newGame->nextRoom,'\0',50);
+  sprintf(newGame->nextRoom,"%s/%s",newGame->dirName,name);
+  
+  /*add the name to the path*/
+  addToPath(newGame,name);
   free(line); 
   line = NULL; 
 }
 
 /*********************
- * printRoom(): prints the room
+ * getRoom(): prints the room
+ * and calls user input function
  *********************/
-void printRoom(char* selection_filepath, Game* newGame) {
+void getRoom(Game* newGame) {
   /*store the output to display again in case of
    * bad user input to avoid processing file again*/
   char* output;
   int outputSize = 256;
   output = malloc(outputSize * sizeof(char));
-  checkMem(output);
+  checkMem(output,213);
   memset(output,'\0',outputSize);
 
   FILE* file_ptr = 0;
   /*open the file*/
-  file_ptr = fopen(selection_filepath,"r");
+  file_ptr = fopen(newGame->nextRoom,"r");
   if (file_ptr == 0) {
-    printf("Could not open file %s\n",selection_filepath);
+    printf("Could not open file %s\n",newGame->nextRoom);
     exit(1);
   }
   int nameLength = 6;
@@ -184,18 +237,22 @@ void printRoom(char* selection_filepath, Game* newGame) {
   int buffSize = 100;
   int i;
   char data[buffSize];
-  
+ 
+  /*read file line by line*/
   memset(data,'\0',sizeof(data));
   while (fgets(data,buffSize,file_ptr)) {
+    /*use strtok to clean up line*/
     char* token = strtok(data," ");
     if (strcmp(token,"CONNECTION") == 0) {
       token = strtok(NULL," ");
       token = strtok(NULL,"\n");
     }
+
+    /*add each room name to the array if it's in the global names array*/
     for (i=0; i < NUM_ROOMS; i++) {
       if (strcmp(token,ROOMS[i]) == 0) {
         tempStr = malloc(tempStrLength * sizeof(char));
-        checkMem(tempStr);
+        checkMem(tempStr,258);
         memset(tempStr,'\0',tempStrLength);
         strcpy(tempStr,token);
         connections[numConnections] = tempStr;
@@ -203,7 +260,8 @@ void printRoom(char* selection_filepath, Game* newGame) {
       }
     }
   }
-  /*start at one to avoid empty string from tokenizer*/
+
+  /*create an output string, so we don't have to re-read file data*/
   for (i = 0; i < numConnections; i++) {
     sprintf(output,"%s%s",output,connections[i]);
     if (i != numConnections - 1) {
@@ -213,9 +271,11 @@ void printRoom(char* selection_filepath, Game* newGame) {
     }
   }
   printf("%s",output);
+
   /*add connections and count to game struct*/
   newGame->currConnections = connections;
   newGame->currConnectionsCount = numConnections;
+  
   getInput(newGame,output);
 }
 
@@ -224,14 +284,19 @@ void printRoom(char* selection_filepath, Game* newGame) {
  * endGame(): displays end of game
  * *******************/
 void endGame(Game* game) {
-
+  printf("YOU HAVE FOUND THE END ROOM. CONGRATULATIONS!\n");
+  printf("YOU TOOK %d STEPS. YOUR PATH TO VICTORY WAS:\n",game->steps);
+  int i;
+  for (i = 0; i < game->path_idx; i++) {
+    printf("%s\n",game->path[i]);
+  }
 }
 
 /*********************
  * main()
  * *******************/
 int main() {
-
+  /*initialize all game struct vars*/
   Game* newGame = 0;
   newGame = malloc(sizeof(Game));
   if (newGame == 0) {
@@ -239,39 +304,39 @@ int main() {
     exit(1);
   }
   newGame->steps = 0;
+  newGame->path = 0;
   newGame->path = malloc(CREATED_ROOMS * sizeof(char*));
-  checkMem(*newGame->path);
+  if (newGame->path == 0) {
+    printf("Malloc error creating path\n");
+    exit(1);
+  }
   newGame->currConnections = malloc(CREATED_ROOMS * sizeof(char*));
   newGame->currConnectionsCount = 0;
+  newGame->dirName = 0;
+  newGame->nextRoom = 0;
+  newGame->path_idx = 0;
 
+
+  /*strings to hold path to files*/
   char* start_filepath = 0;
   start_filepath = malloc(50 * sizeof(char));
-  checkMem(start_filepath);
+  checkMem(start_filepath,322);
+  memset(start_filepath,'\n',50);
   
   char* end_filepath = 0;
   end_filepath = malloc(50 * sizeof(char));
-  checkMem(end_filepath);
+  checkMem(end_filepath,327);
+  memset(end_filepath,'\n',50);
   
-  char* selection_filepath = 0;
-  selection_filepath = malloc(50 * sizeof(char));
-  checkMem(selection_filepath);
+  findStartEnd(start_filepath,end_filepath,newGame);
 
-  findStartEnd(start_filepath,end_filepath);
-
-  memset(selection_filepath,'\0',50 * sizeof(char));
-  strcpy(selection_filepath,start_filepath);
-  printf("start: %s select: %s\n",start_filepath,selection_filepath);
-  printRoom(selection_filepath, newGame);
-  int end = 0;
- /* while (end == 0) {
-    printRoom(selection_filepath);
-    memset(selection_filepath,'\0',50 * sizeof(char));
-    getNextRoom(selection_filepath,newGame);
-    if (strstr(selection_filepath,end_filepath)) {
-      end=1;
-      break;
-    }
+  newGame->nextRoom = start_filepath;
+  
+  while (strcmp(newGame->nextRoom,end_filepath) != 0) {
+    getRoom(newGame);
+    newGame->steps++;
+    printf("\n");
   }
-  endGame(newGame);*/
+  endGame(newGame);
 }
 
