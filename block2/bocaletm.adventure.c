@@ -134,7 +134,7 @@ void findStartEnd(char* start_filepath, char* end_filepath, Game* newGame) {
 void addToPath(Game* game,char* name) {
   game->path[game->path_idx] = malloc(MAX_RM_CHARS * sizeof(char));
   checkMem(game->path[game->path_idx],136);
-  strncpy(game->path[game->path_idx],name,MAX_RM_CHARS - 1);
+  strncpy(game->path[game->path_idx],name,MAX_RM_CHARS);
   game->path_idx++;
 }
 
@@ -263,11 +263,11 @@ void getRoom(Game* newGame) {
 
   /*create an output string, so we don't have to re-read file data*/
   for (i = 0; i < numConnections; i++) {
-    sprintf(output,"%s%s",output,connections[i]);
+    strcat(output,connections[i]);
     if (i != numConnections - 1) {
-      sprintf(output,"%s, ",output);
+      strcat(output,", ");
     } else {
-      sprintf(output,"%s\n",output);
+      strcat(output,"\n");
     }
   }
   printf("%s",output);
@@ -277,6 +277,12 @@ void getRoom(Game* newGame) {
   newGame->currConnectionsCount = numConnections;
   
   getInput(newGame,output);
+
+  for (i = 0; i < newGame->currConnectionsCount; i++) {
+    free(newGame->currConnections[i]);
+    newGame->currConnections[i] = 0;
+  }
+
 }
 
 
@@ -343,5 +349,11 @@ int main() {
   free(start_filepath);
   free(end_filepath);
   free(newGame->dirName);
+  free(newGame->currConnections);
+  int i;
+  for (i = 0; i < newGame->path_idx; i++) {
+    free(newGame->path[i]);
+  }
+  free(newGame->path);
 }
 
