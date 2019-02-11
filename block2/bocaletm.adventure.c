@@ -132,7 +132,7 @@ void findStartEnd(char* start_filepath, char* end_filepath, Game* newGame) {
  * in the game struct
  *********************/
 void addToPath(Game* game,char* name) {
-  game->path[game->path_idx] = malloc(MAX_RM_CHARS * sizeof(char));
+  game->path[game->path_idx] = malloc((MAX_RM_CHARS + 1) * sizeof(char));
   checkMem(game->path[game->path_idx],136);
   strncpy(game->path[game->path_idx],name,MAX_RM_CHARS);
   game->path_idx++;
@@ -278,11 +278,17 @@ void getRoom(Game* newGame) {
   
   getInput(newGame,output);
 
+  printf("curr %d %s\n",newGame->currConnectionsCount,newGame->currConnections[newGame->currConnectionsCount - 1]);
   for (i = 0; i < newGame->currConnectionsCount; i++) {
     free(newGame->currConnections[i]);
+    newGame->currConnectionsCount = 0;
     newGame->currConnections[i] = 0;
   }
-
+  free(newGame->currConnections);
+  newGame->currConnections = 0;
+  free(output);
+  free(connections);
+  fclose(file_ptr);
 }
 
 
@@ -293,7 +299,7 @@ void endGame(Game* game) {
   printf("YOU HAVE FOUND THE END ROOM. CONGRATULATIONS!\n");
   printf("YOU TOOK %d STEPS. YOUR PATH TO VICTORY WAS:\n",game->steps);
   int i;
-  for (i = 0; i < game->path_idx; i++) {
+  for (i = 0; i < game->path_idx - 1; i++) {
     printf("%s\n",game->path[i]);
   }
 }
@@ -316,7 +322,7 @@ int main() {
     printf("Malloc error creating path\n");
     exit(1);
   }
-  newGame->currConnections = malloc(CREATED_ROOMS * sizeof(char*));
+  newGame->currConnections = 0;
   newGame->currConnectionsCount = 0;
   newGame->dirName = 0;
   newGame->nextRoom = 0;
@@ -355,5 +361,8 @@ int main() {
     free(newGame->path[i]);
   }
   free(newGame->path);
+  free(newGame);
+
+  exit(0);
 }
 
