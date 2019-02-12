@@ -1,11 +1,12 @@
 CC = gcc
 CFLAGS = -g -Wall -std=c89
+CFLAGS2 = -g -Wall -std=c89 -lpthread
 
 bld : bocaletm.buildrooms.c
 	$(CC) $(CFLAGS) -o $@ $^
 
 adv : bocaletm.adventure.c
-	$(CC) $(CFLAGS) -o $@ $^
+	$(CC) $(CFLAGS2) -o $@ $^
 
 memcheckBld : 
 	valgrind --leak-check=yes --show-reachable=yes ./bld

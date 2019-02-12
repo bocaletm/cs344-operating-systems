@@ -69,21 +69,6 @@ void* setTime(void* argument) {
 }
 
 /*******************
- * timekeeper()
- * ****************/
-void timekeeper(){
-  /*declare thread*/
-  pthread_t thread;
-  int result_code = 1;
-   /*do the work*/
-  result_code = pthread_create(&thread,NULL,setTime,NULL);
-  /*make sure thread exited successfully*/
-  if (result_code != 0) {
-    printf("Error with timekeeper()\n");
-  }
-}
-
-/*******************
  * getTime()
  * *****************/
 void getTime() {
@@ -220,6 +205,7 @@ void findStartEnd(char* start_filepath, char* end_filepath, Game* newGame) {
  *********************/
 void addToPath(Game* game,char* name) {
   game->path[game->path_idx] = malloc((MAX_RM_CHARS + 1) * sizeof(char));
+  memset(game->path[game->path_idx],'\0',MAX_RM_CHARS + 1);
   checkMem(game->path[game->path_idx],136);
   strncpy(game->path[game->path_idx],name,MAX_RM_CHARS);
   game->path_idx++;
@@ -290,7 +276,7 @@ void getInput(Game* newGame,char* roomInfo) {
   
   /*add the name to the path*/
   addToPath(newGame,name);
-  free(line); 
+  free(line);
   line = NULL; 
 }
 
@@ -377,13 +363,12 @@ void getRoom(Game* newGame) {
 
   for (i = 0; i < newGame->currConnectionsCount; i++) {
     free(newGame->currConnections[i]);
-    newGame->currConnectionsCount = 0;
     newGame->currConnections[i] = 0;
   }
+  newGame->currConnectionsCount = 0;
   free(newGame->currConnections);
   newGame->currConnections = 0;
   free(output);
-  free(connections);
   fclose(file_ptr);
 }
 
@@ -409,6 +394,16 @@ int main() {
   /*lock the mutex, so time thread is blocked*/
   pthread_mutex_lock(&timex);
 
+  /*declare thread*/
+  pthread_t thread;
+  int result_code = 1;
+   /*do the work*/
+  result_code = pthread_create(&thread,NULL,setTime,NULL);
+  /*make sure thread began successfully*/
+  if (result_code != 0) {
+    printf("Error with timekeeper\n");
+  }
+
   /*initialize all game struct vars*/
   Game* newGame = 0;
   newGame = malloc(sizeof(Game));
@@ -428,7 +423,10 @@ int main() {
   newGame->dirName = 0;
   newGame->nextRoom = 0;
   newGame->path_idx = 0;
-
+  int i;
+  for (i = 0; i < CREATED_ROOMS; i++) {
+    newGame->path[i] = 0;
+  }
   /*strings to hold path to files*/
   char* start_filepath = 0;
   start_filepath = malloc(50 * sizeof(char));
@@ -445,8 +443,6 @@ int main() {
   newGame->nextRoom = start_filepath;
   
   while (strcmp(newGame->nextRoom,end_filepath) != 0) {
-    /*start time thread*/
-    timekeeper();
     getRoom(newGame);
     newGame->steps++;
     printf("\n");
@@ -458,14 +454,14 @@ int main() {
   free(end_filepath);
   free(newGame->dirName);
   free(newGame->currConnections);
-  int i;
   for (i = 0; i < newGame->path_idx; i++) {
     free(newGame->path[i]);
   }
   free(newGame->path);
   free(newGame);
-  /*destroy mutex*/
+  /*destroy mutex and thread*/
   pthread_mutex_destroy(&timex);
+  pthread_cancel(thread);
   exit(0);
 }
 
