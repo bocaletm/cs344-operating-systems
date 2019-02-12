@@ -13,6 +13,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <pthread.h>
 
 #define CREATED_ROOMS 7
 #define NUM_ROOMS 10
@@ -30,6 +31,88 @@ typedef struct {
   char* dirName;
   char* nextRoom;
 } Game; 
+
+pthread_mutex_t timex;
+
+/******************
+ * setTime()
+ * prints present time to file
+ * ***************/
+void* setTime(void* argument) {
+
+  while(1) {
+    /*unlock mutex*/
+    pthread_mutex_unlock(&timex);
+     /*lock the mutex*/
+    pthread_mutex_lock(&timex);
+
+    /*open file*/
+    int file_descriptor = -1;
+    char writeBuffer[256];
+    memset(writeBuffer,'\0',sizeof(writeBuffer));
+    file_descriptor = open("./currentTime.txt", O_WRONLY | O_CREAT, 0600);
+    if (file_descriptor < 0) {
+        printf("Could not open currentTime.txt\n");
+    }
+    /*get the time (reference: https://stackoverflow.com/questions/5141960/get-the-current-time-in-c)*/
+    time_t rawtime; 
+    struct tm * timeinfo; 
+    time(&rawtime); 
+    timeinfo = localtime(&rawtime); 
+    sprintf(writeBuffer,"%s",asctime(timeinfo));
+    /*write the time*/
+    write(file_descriptor,writeBuffer,256); 
+    close(file_descriptor); 
+    pthread_mutex_unlock(&timex);
+  }
+  return NULL;
+}
+
+/*******************
+ * timekeeper()
+ * ****************/
+void timekeeper(){
+  /*declare thread*/
+  pthread_t thread;
+  int result_code = 1;
+   /*do the work*/
+  result_code = pthread_create(&thread,NULL,setTime,NULL);
+  /*make sure thread exited successfully*/
+  if (result_code != 0) {
+    printf("Error with timekeeper()\n");
+  }
+}
+
+/*******************
+ * getTime()
+ * *****************/
+void getTime() {
+  /*try to unlock mutex*/
+  pthread_mutex_unlock(&timex);
+  /*lock the mutex*/
+  pthread_mutex_lock(&timex);
+
+  /*open the file; do not end program just because we can't read time*/
+  int file_descriptor = -1;
+  char readBuffer[256];
+  memset(readBuffer,'\0',sizeof(readBuffer));
+  file_descriptor = open("./currentTime.txt", O_RDONLY, 0600);
+  int nread = 0;
+  if (file_descriptor < 0) {
+      printf("Could not open currentTime.txt\n");
+  }
+
+  /*read file*/
+  nread = read(file_descriptor,readBuffer,sizeof(readBuffer));
+  if (nread == 0) {
+      printf("\nCould not read currentTime.txt\n");
+  }
+  /*print file contents*/
+  printf("\n%s\n",readBuffer);
+  
+  /*unlock mutex*/
+  pthread_mutex_unlock(&timex);
+}
 
 /********************
  * checkMem(): checks if malloc
@@ -65,10 +148,14 @@ void getDir(char* dirName) {
           memset(newestDirName,'\0',sizeof(newestDirName));
           strncpy(newestDirName,fileInDir->d_name,255);
         }
-      }
+      } 
     }
   } else {
     printf("Error. Could not open present directory.\n");
+    exit(1);
+  }
+  if (newestDirName[0] == '\0') {
+    printf("Error. Could not find dirName\n");
     exit(1);
   }
   closedir(dirToCheck);
@@ -152,7 +239,8 @@ void getInput(Game* newGame,char* roomInfo) {
   while(valid < 1) {
     printf("WHERE TO? >");
     charsEntered = getline(&line, &bufferSize, stdin);
-    if (charsEntered != MAX_RM_CHARS + 1) {
+    /*exit early if length is invalid*/
+    if (charsEntered != MAX_RM_CHARS + 1 && charsEntered != 5) {
       printf("\nHUH? I DON’T UNDERSTAND THAT ROOM. TRY AGAIN.\n\n");
       printf("%s",roomInfo);
       continue;
@@ -166,7 +254,16 @@ void getInput(Game* newGame,char* roomInfo) {
         nextChar = line[idx];
       }
       line[idx] = '\0';
-
+      
+      /*check for time command*/
+      if (strcmp("time",line) == 0) {
+        /*unlock mutex*/
+        pthread_mutex_unlock(&timex);
+        getTime();
+        pthread_mutex_lock(&timex);
+        /*loop back without reprinting room*/
+        continue;
+      }
       /*check if one of the current room's connections was entered*/
       for (i = 0; i < newGame->currConnectionsCount; i++) {
         if (strcmp(newGame->currConnections[i],line) == 0) {
@@ -278,7 +375,6 @@ void getRoom(Game* newGame) {
   
   getInput(newGame,output);
 
-  printf("curr %d %s\n",newGame->currConnectionsCount,newGame->currConnections[newGame->currConnectionsCount - 1]);
   for (i = 0; i < newGame->currConnectionsCount; i++) {
     free(newGame->currConnections[i]);
     newGame->currConnectionsCount = 0;
@@ -299,7 +395,7 @@ void endGame(Game* game) {
   printf("YOU HAVE FOUND THE END ROOM. CONGRATULATIONS!\n");
   printf("YOU TOOK %d STEPS. YOUR PATH TO VICTORY WAS:\n",game->steps);
   int i;
-  for (i = 0; i < game->path_idx - 1; i++) {
+  for (i = 0; i < game->path_idx; i++) {
     printf("%s\n",game->path[i]);
   }
 }
@@ -308,6 +404,11 @@ void endGame(Game* game) {
  * main()
  * *******************/
 int main() {
+  /*init the mutex for timekeeping*/
+  pthread_mutex_init(&timex,NULL);
+  /*lock the mutex, so time thread is blocked*/
+  pthread_mutex_lock(&timex);
+
   /*initialize all game struct vars*/
   Game* newGame = 0;
   newGame = malloc(sizeof(Game));
@@ -328,7 +429,6 @@ int main() {
   newGame->nextRoom = 0;
   newGame->path_idx = 0;
 
-
   /*strings to hold path to files*/
   char* start_filepath = 0;
   start_filepath = malloc(50 * sizeof(char));
@@ -345,6 +445,8 @@ int main() {
   newGame->nextRoom = start_filepath;
   
   while (strcmp(newGame->nextRoom,end_filepath) != 0) {
+    /*start time thread*/
+    timekeeper();
     getRoom(newGame);
     newGame->steps++;
     printf("\n");
@@ -362,7 +464,8 @@ int main() {
   }
   free(newGame->path);
   free(newGame);
-
+  /*destroy mutex*/
+  pthread_mutex_destroy(&timex);
   exit(0);
 }
 
