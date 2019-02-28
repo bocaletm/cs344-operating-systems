@@ -62,23 +62,31 @@ void changeDir(char* dir) {
   int err = -5;
   char* token;
   const char space[2] = " "; 
+  /*char cwd[1024];
+  memset(cwd,'\0',sizeof(cwd));
+  getcwd(cwd, sizeof(cwd));
+  printf("pwd: %s\n",cwd);
+  fflush(stdout);*/
   /*if there's nothing where directory should be
    * cd home */
   if (dir[dirStart] == '\0') {
       err = chdir(getenv("HOME"));
+      /*memset(cwd,'\0',sizeof(cwd));
+      getcwd(cwd, sizeof(cwd));
+      printf("pwd: %s\n",cwd);
+      fflush(stdout);*/
   } else {
+      /*use second space-delim string; ignore everything else*/
       token = strtok(dir,space);
-      while (token != NULL) {
-        printf("%s ",token);
-        fflush(stdout);
-        token = strtok(NULL,space);
-      }
+      token = strtok(NULL,space);
+      err = chdir(token);
+      /*memset(cwd,'\0',sizeof(cwd));
+      getcwd(cwd, sizeof(cwd));
+      printf("pwd: %s\n",cwd);
+      fflush(stdout);*/
    }
-    //cleanDir = malloc(255 * sizeof(char));
-    //err = chdir
-    //free();  
   if (err == -1) {
-    printf("Could not change directories\n");
+    printf("Could not find that directory\n");
   }
 }
 
