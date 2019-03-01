@@ -17,9 +17,15 @@
 #include <signal.h>
 #include <fcntl.h>
 
+/*globals for handlers*/
 int toggleBackgroundProc = 1;
+pid_t deadChildPid = NULL;
+int deadChildStatus = -5;
+
+/*comand limits*/
 const int MAX_CHARS = 2048;
 const int MAX_ARGS = 512;
+
 void sigstpHandler(int);
 void sigchldHandler(int);
 
@@ -47,18 +53,11 @@ void sigstpHandler(int signo) {
  *********************/
 void sigchldHandler(int signo) {
   pid_t p;
-  int status;
-  char* message1 = "Child process ";
-  char* message2 = "terminated with status ";
-  char* enter = "\n";
+  int status = -6;
   /*reap what you sow*/
   while ((p=waitpid((pid_t)(-1),&status,WNOHANG)) > 0) {
-    write(STDOUT_FILENO,message1,14);
-    write(STDOUT_FILENO,&p,sizeof(p));
-    write(STDOUT_FILENO,message2,24);
-    write(STDOUT_FILENO,&status,sizeof(status));
-    write(STDOUT_FILENO,enter,1);
-    fflush(stdout);
+    deadChildPid = p;
+    deadChildStatus = status;
   }
 }
 
@@ -72,7 +71,7 @@ void redirectIn(char* file) {
     printf("open() failed on %s\n",file); 
   }
   /*redirect input*/
-  int result = dup2(sourceFD,stdin);
+  int result = dup2(sourceFD,0);
   if (result == -1) { 
     printf("dup2() failed on input file %s\n",file); 
   }
@@ -88,7 +87,7 @@ void redirectOut(char* file) {
     printf("open() failed on %s\n",file); 
   }
   /*redirect output*/
-  int result = dup2(targetFD,stdout);
+  int result = dup2(targetFD,1);
   if (result == -1) { 
     printf("dup2() failed on output file %s\n",file); 
   }
@@ -117,8 +116,6 @@ void execute(char* command,int* spawnExit) {
       //tokenize command
   char* token = strtok(command,space);
   while (token != NULL) {
-    printf("processing token [%s]\n",token);
-    fflush(stdout);
     if (strcmp(token,"<") == 0) {
       redirectInBool = 1 - redirectInBool;
       token = strtok(NULL,space);
@@ -126,8 +123,6 @@ void execute(char* command,int* spawnExit) {
       redirectOutBool = 1 - redirectOutBool;
       token = strtok(NULL,space);
     } else if (strcmp(token,"&") == 0) {
-      printf("background found\n");
-      fflush(stdout);
       background = 1 - background;
       token = strtok(NULL,space);
     } else {
@@ -156,26 +151,26 @@ void execute(char* command,int* spawnExit) {
       exit(1);
       break;
     case 0:
-      printf("child running...\n");
-      fflush(stdout);
       //reset sigint for the child
       signal(SIGINT,SIG_DFL);
       if (argCount < MAX_ARGS) { 
         execvp(arguments[0],arguments);
-        exit(0);
+        exit(1);
       } else {
         printf("Max number of arguments exceeded. Try again.\n");
         fflush(stdout);
       }   
       break;
     default:
-      printf("backgroundProc: %d background: %d\n",toggleBackgroundProc,background);
       if (toggleBackgroundProc == 1 && background == 1) {
-        printf("Running child in background\n");
+        printf("Running child [%d] in background\n",spawnpid);
         fflush(stdout);
         spawnpid = waitpid(spawnpid,spawnExit,WNOHANG);
       } else {
+        printf("Running child [%d] in foreground\n",spawnpid);
+        fflush(stdout);
         spawnpid = waitpid(spawnpid,spawnExit,0);
+        printf("Execute: Child process [%d] has terminated with exit status %d\n",(int)spawnpid,*spawnExit); 
       }
       break;
   }
@@ -252,8 +247,16 @@ void processCmd(char* rawCmd) {
     //run anything non-native
     execute(rawCmd,&exitStatus);
   }
+  
   free(cmd);
-} 
+  /*check for dead child*/
+  pid_t lastDead = deadChildPid;
+  if (deadChildPid != lastDead) {
+    printf("Child process [%d] has terminated with exit status %d\n",(int)deadChildPid,deadChildStatus);
+    lastDead = deadChildPid;
+  }
+}
+
 /*********************
  * getInput(): gets user input and recovers
  * from sigtstp handler during fgets 
@@ -311,17 +314,24 @@ int main() {
   //handle child process termination
   struct sigaction sa_sigchld = {0};
   sa_sigchld.sa_handler = sigchldHandler; 
-  sigemptyset(&sa_sigchld.sa_mask);
+  sigfillset(&sa_sigchld.sa_mask);
   sa_sigchld.sa_flags = SA_RESTART | SA_NOCLDSTOP;
   sigaction(SIGCHLD, &sa_sigchld, NULL);
-
+  
+  pid_t lastDead = deadChildPid;
   //endless loop; exit will terminate shell from
   //processCmd function
   while (1 == 1) {
+    /*check for dead child*/
+    if (deadChildPid != lastDead) {
+      printf("Child process [%d] has terminated with exit status %d\n",(int)deadChildPid,deadChildStatus);
+      lastDead = deadChildPid;
+    }
+    /*get and process input*/
     char* command = 0;
-    command = getInput(command);
-    /*skip all processing for comments*/
-    if (command[0] != '#') {
+    command = getInput(command); 
+    /*skip all processing for comments and empty strings*/
+    if (command != 0 && command[0] != '#' && command[0] != '\0' && command[0] != '\n') {
       processCmd(command); 
     }
     if (command != 0) {
