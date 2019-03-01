@@ -48,7 +48,6 @@ void sigstpHandler(int signo) {
 void sigchldHandler(int signo) {
   pid_t p;
   int status;
-  char* DELETEME = "child handler running...\n";
   char* message1 = "Child process ";
   char* message2 = "terminated with status ";
   char* enter = "\n";
@@ -61,23 +60,93 @@ void sigchldHandler(int signo) {
     write(STDOUT_FILENO,enter,1);
     fflush(stdout);
   }
-  write(STDOUT_FILENO,DELETEME,24);
-  fflush(stdout); 
 }
 
 /*********************
- * execute(): performs I/O redirection and exec 
+ * redirectIn(): performs input redirection 
+ *********************/
+void redirectIn(char* file) {
+  /*open a file*/
+  int sourceFD = open(file, O_RDONLY);
+  if (sourceFD == -1) { 
+    printf("open() failed on %s\n",file); 
+  }
+  /*redirect input*/
+  int result = dup2(sourceFD,stdin);
+  if (result == -1) { 
+    printf("dup2() failed on input file %s\n",file); 
+  }
+}
+
+/*********************
+ * redirectOut(): performs output redirection 
+ *********************/
+void redirectOut(char* file) {
+  /*open a file*/
+  int targetFD = open(file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+  if (targetFD == -1) { 
+    printf("open() failed on %s\n",file); 
+  }
+  /*redirect output*/
+  int result = dup2(targetFD,stdout);
+  if (result == -1) { 
+    printf("dup2() failed on output file %s\n",file); 
+  }
+}
+
+/*********************
+ * execute(): process commandline options and exec 
  *********************/
 void execute(char* command,int* spawnExit) {
-  
+  /*bools to process commandline options */
+  int background = 0;
+  int redirectInBool = 0;
+  int redirectOutBool = 0;
+
+  /*necessary for strtok*/ 
   const char space[2] = " ";
+  /*array to point to individual tokens*/
   char* arguments[MAX_ARGS + 1];
   int i;
   for (i = 0; i < MAX_ARGS + 1; i ++) {
     arguments[i] = NULL;
   }
-  int argCount = 0; 
-  int background = 0;
+  int argCount = 0;
+ 
+  /*parse the command*/
+      //tokenize command
+  char* token = strtok(command,space);
+  while (token != NULL) {
+    printf("processing token [%s]\n",token);
+    fflush(stdout);
+    if (strcmp(token,"<") == 0) {
+      redirectInBool = 1 - redirectInBool;
+      token = strtok(NULL,space);
+    } else if (strcmp(token,">") == 0) {
+      redirectOutBool = 1 - redirectOutBool;
+      token = strtok(NULL,space);
+    } else if (strcmp(token,"&") == 0) {
+      printf("background found\n");
+      fflush(stdout);
+      background = 1 - background;
+      token = strtok(NULL,space);
+    } else {
+      /*handle redirection and reset redirection flags*/
+      if (redirectInBool) {
+        redirectIn(&token);
+        redirectInBool = 1 - redirectInBool;
+      } else if (redirectOutBool) {
+        redirectOut(&token);
+        redirectOutBool = 1 - redirectOutBool;
+      } else {
+        /*add argument to exec argument list*/
+        arguments[argCount] = token;
+        argCount++;
+        token = strtok(NULL,space);
+      }
+    }
+  }
+  /*fork the process*/
   pid_t spawnpid = -5;
   spawnpid = fork();
   switch (spawnpid) {
@@ -91,17 +160,19 @@ void execute(char* command,int* spawnExit) {
       fflush(stdout);
       //reset sigint for the child
       signal(SIGINT,SIG_DFL);
-      //tokenize command
-      char* token = strtok(command,space);
-      while (token != NULL) {
-        arguments[argCount] = token;
-        argCount++;
-        token = strtok(NULL,space);
-      }
-      execvp(arguments[0],arguments);    
+      if (argCount < MAX_ARGS) { 
+        execvp(arguments[0],arguments);
+        exit(0);
+      } else {
+        printf("Max number of arguments exceeded. Try again.\n");
+        fflush(stdout);
+      }   
       break;
     default:
-      if (toggleBackgroundProc && background) {
+      printf("backgroundProc: %d background: %d\n",toggleBackgroundProc,background);
+      if (toggleBackgroundProc == 1 && background == 1) {
+        printf("Running child in background\n");
+        fflush(stdout);
         spawnpid = waitpid(spawnpid,spawnExit,WNOHANG);
       } else {
         spawnpid = waitpid(spawnpid,spawnExit,0);
