@@ -7,6 +7,7 @@
 
 
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,6 +19,7 @@
 
 int toggleBackgroundProc = 1;
 const int MAX_CHARS = 2048;
+const int MAX_ARGS = 512;
 void sigstpHandler(int);
 void sigchldHandler(int);
 
@@ -43,45 +45,60 @@ void sigstpHandler(int signo) {
 /*********************
  * sigchldHandler(): handles child process termination 
  *********************/
-void sigstpHandler(int signo) {
+void sigchldHandler(int signo) {
   pid_t p;
   int status;
+  char* DELETEME = "child handler running...\n";
   char* message1 = "Child process ";
   char* message2 = "terminated with status ";
   char* enter = "\n";
   /*reap what you sow*/
-  while ((p=waitpid(-1,&status,WNOHANG)) != -1) {
+  while ((p=waitpid((pid_t)(-1),&status,WNOHANG)) > 0) {
     write(STDOUT_FILENO,message1,14);
-    write(STDOUT_FILENO,p,sizeof(p));
+    write(STDOUT_FILENO,&p,sizeof(p));
     write(STDOUT_FILENO,message2,24);
-    write(STDOUT_FILENO,status,sizeof(status));
+    write(STDOUT_FILENO,&status,sizeof(status));
     write(STDOUT_FILENO,enter,1);
     fflush(stdout);
   }
+  write(STDOUT_FILENO,DELETEME,24);
+  fflush(stdout); 
 }
 
 /*********************
  * execute(): performs I/O redirection and exec 
  *********************/
 void execute(char* command,int* spawnExit) {
+  
+  const char space[2] = " ";
+  char* arguments[MAX_ARGS + 1];
+  int i;
+  for (i = 0; i < MAX_ARGS + 1; i ++) {
+    arguments[i] = NULL;
+  }
+  int argCount = 0; 
+  int background = 0;
   pid_t spawnpid = -5;
   spawnpid = fork();
-  switch (spawnpid)
-  {
+  switch (spawnpid) {
     case -1:
       printf("Fork error. Exiting.\n");
       fflush(stdout);
       exit(1);
       break;
     case 0:
+      printf("child running...\n");
+      fflush(stdout);
       //reset sigint for the child
       signal(SIGINT,SIG_DFL);
-      //execute the command
-      
-
-
-
-
+      //tokenize command
+      char* token = strtok(command,space);
+      while (token != NULL) {
+        arguments[argCount] = token;
+        argCount++;
+        token = strtok(NULL,space);
+      }
+      execvp(arguments[0],arguments);    
       break;
     default:
       if (toggleBackgroundProc && background) {
@@ -109,31 +126,19 @@ void changeDir(char* dir) {
   int err = -5;
   char* token;
   const char space[2] = " "; 
-  /*char cwd[1024];
-  memset(cwd,'\0',sizeof(cwd));
-  getcwd(cwd, sizeof(cwd));
-  printf("pwd: %s\n",cwd);
-  fflush(stdout);*/
   /*if there's nothing where directory should be
    * cd home */
   if (dir[dirStart] == '\0') {
       err = chdir(getenv("HOME"));
-      /*memset(cwd,'\0',sizeof(cwd));
-      getcwd(cwd, sizeof(cwd));
-      printf("pwd: %s\n",cwd);
-      fflush(stdout);*/
   } else {
       /*use second space-delim string; ignore everything else*/
       token = strtok(dir,space);
       token = strtok(NULL,space);
       err = chdir(token);
-      /*memset(cwd,'\0',sizeof(cwd));
-      getcwd(cwd, sizeof(cwd));
-      printf("pwd: %s\n",cwd);
-      fflush(stdout);*/
    }
   if (err == -1) {
     printf("Could not find that directory\n");
+    fflush(stdout);
   }
 }
 
@@ -172,10 +177,11 @@ void processCmd(char* rawCmd) {
     changeDir(rawCmd);
   } else if (strcmp(cmd,"status") == 0) {
     getStatus();
+  } else {
+    //run anything non-native
+    execute(rawCmd,&exitStatus);
   }
   free(cmd);
-  //run anything non-native
-  execute(rawCmd,&exitStatus);
 } 
 /*********************
  * getInput(): gets user input and recovers
@@ -230,6 +236,13 @@ int main() {
   sigfillset(&sa_sigtstp.sa_mask);
   sa_sigtstp.sa_flags = 0;
   sigaction(SIGTSTP, &sa_sigtstp, NULL);
+  
+  //handle child process termination
+  struct sigaction sa_sigchld = {0};
+  sa_sigchld.sa_handler = sigchldHandler; 
+  sigemptyset(&sa_sigchld.sa_mask);
+  sa_sigchld.sa_flags = SA_RESTART | SA_NOCLDSTOP;
+  sigaction(SIGCHLD, &sa_sigchld, NULL);
 
   //endless loop; exit will terminate shell from
   //processCmd function
