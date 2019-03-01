@@ -19,6 +19,7 @@
 int toggleBackgroundProc = 1;
 const int MAX_CHARS = 2048;
 void sigstpHandler(int);
+void sigchldHandler(int);
 
 /*********************
  * sigstpHandler(): handles ctrl-z 
@@ -40,10 +41,56 @@ void sigstpHandler(int signo) {
 }
 
 /*********************
+ * sigchldHandler(): handles child process termination 
+ *********************/
+void sigstpHandler(int signo) {
+  pid_t p;
+  int status;
+  char* message1 = "Child process ";
+  char* message2 = "terminated with status ";
+  char* enter = "\n";
+  /*reap what you sow*/
+  while ((p=waitpid(-1,&status,WNOHANG)) != -1) {
+    write(STDOUT_FILENO,message1,14);
+    write(STDOUT_FILENO,p,sizeof(p));
+    write(STDOUT_FILENO,message2,24);
+    write(STDOUT_FILENO,status,sizeof(status));
+    write(STDOUT_FILENO,enter,1);
+    fflush(stdout);
+  }
+}
+
+/*********************
  * execute(): performs I/O redirection and exec 
  *********************/
-void execute(char* command) {
-  //  exec(command);
+void execute(char* command,int* spawnExit) {
+  pid_t spawnpid = -5;
+  spawnpid = fork();
+  switch (spawnpid)
+  {
+    case -1:
+      printf("Fork error. Exiting.\n");
+      fflush(stdout);
+      exit(1);
+      break;
+    case 0:
+      //reset sigint for the child
+      signal(SIGINT,SIG_DFL);
+      //execute the command
+      
+
+
+
+
+      break;
+    default:
+      if (toggleBackgroundProc && background) {
+        spawnpid = waitpid(spawnpid,spawnExit,WNOHANG);
+      } else {
+        spawnpid = waitpid(spawnpid,spawnExit,0);
+      }
+      break;
+  }
 }
 /*********************
  * exitGracefully(): kills any processes and jobs
@@ -102,6 +149,7 @@ void getStatus() {
  *********************/
 void processCmd(char* rawCmd) {
   char* cmd;
+  int exitStatus = -5;
   int lastChar = -1;
   //get first string
   int i;
@@ -127,7 +175,7 @@ void processCmd(char* rawCmd) {
   }
   free(cmd);
   //run anything non-native
-  execute(rawCmd);
+  execute(rawCmd,&exitStatus);
 } 
 /*********************
  * getInput(): gets user input and recovers
