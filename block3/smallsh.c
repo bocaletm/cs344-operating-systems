@@ -80,32 +80,63 @@ void sigchldHandler(int signo) {
  * redirectIn(): performs input redirection 
  *********************/
 void redirectIn(char* file) {
-  /*open a file*/
-  int sourceFD = open(file, O_RDONLY);
-  if (sourceFD == -1) { 
-    printf("open() failed on %s\n",file); 
+  int noerror = 1;
+  /*get full path to file*/
+  char* filepath = malloc(256 * sizeof(char));
+  memset(filepath,'\0',256);
+  if (getcwd(filepath,sizeof(filepath) == 0)) {
+    printf("getcwd() error in redirectOut()\n");
+    fflush(stdout);
+    noerror = 0;
   }
-  /*redirect input*/
-  int result = dup2(sourceFD,0);
-  if (result == -1) { 
-    printf("dup2() failed on input file %s\n",file); 
+  if (noerror) {
+    snprintf(filepath,256,"%s/%s",filepath,file); 
+    /*open a file*/
+    int sourceFD = open(file, O_RDONLY);
+    if (sourceFD == -1) { 
+      printf("open() failed on %s\n",file); 
+      fflush(stdout);
+    }
+    /*redirect input*/
+    int result = dup2(sourceFD,0);
+    if (result == -1) { 
+      printf("dup2() failed on input file %s\n",file); 
+      fflush(stdout);
+    }
   }
+  free(filepath);
 }
 
 /*********************
  * redirectOut(): performs output redirection 
  *********************/
 void redirectOut(char* file) {
-  /*open a file*/
-  int targetFD = open(file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-  if (targetFD == -1) { 
-    printf("open() failed on %s\n",file); 
+  int noerror = 1;
+  /*get full path to file*/
+  char* filepath = malloc(256 * sizeof(char));
+  memset(filepath,'\0',256);
+  if (getcwd(filepath,sizeof(filepath) == 0)) {
+    printf("getcwd() error in redirectOut()\n");
+    fflush(stdout);
+    noerror = 0;
   }
-  /*redirect output*/
-  int result = dup2(targetFD,1);
-  if (result == -1) { 
-    printf("dup2() failed on output file %s\n",file); 
+  if (noerror) {
+    snprintf(filepath,256,"%s/%s",filepath,file); 
+
+    /*open a file*/
+    int targetFD = open(file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (targetFD == -1) { 
+      printf("open() failed on %s\n",file); 
+      fflush(stdout);
+    }
+    /*redirect output*/
+    int result = dup2(targetFD,1);
+    if (result == -1) { 
+      printf("dup2() failed on output file %s\n",file); 
+      fflush(stdout);
+    }
   }
+  free(filepath);
 }
 
 /*********************
@@ -139,6 +170,12 @@ void execute(char* command,int* spawnExit) {
     arguments[i] = NULL;
   }
   int argCount = 0;
+  
+  /*array to hold pointers to redirection strings*/
+  char* redirection[2];
+  redirection[0] = 0;
+  redirection[1] = 0;
+
  
   /*parse the command*/
       //tokenize command
@@ -156,10 +193,10 @@ void execute(char* command,int* spawnExit) {
     } else {
       /*handle redirection and reset redirection flags*/
       if (redirectInBool) {
-        redirectIn(&token);
+        redirection[0] = token;
         redirectInBool = 1 - redirectInBool;
       } else if (redirectOutBool) {
-        redirectOut(&token);
+        redirection[1] = token;
         redirectOutBool = 1 - redirectOutBool;
       } else {
         /*add argument to exec argument list*/
@@ -185,6 +222,13 @@ void execute(char* command,int* spawnExit) {
       //set sigint handler for foreground
       if (background == 0) {
         signal(SIGINT,SIG_DFL);
+      }
+      /*redirect if necessary*/
+      if (redirection[0] != 0) {
+        redirectIn(redirection[0]);
+      }
+      if (redirection[1] != 0) {
+        redirectOut(redirection[1]);
       }
       /*execute command*/ 
       if (argCount < MAX_ARGS) { 
