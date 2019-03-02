@@ -22,12 +22,27 @@ int toggleBackgroundProc = 1;
 pid_t deadChildPid = NULL;
 int deadChildStatus = -5;
 
+/*global for last status*/
+int lastForegroundStatus = 0;
+
 /*comand limits*/
 const int MAX_CHARS = 2048;
 const int MAX_ARGS = 512;
 
 void sigstpHandler(int);
 void sigchldHandler(int);
+
+
+/*********************
+ * foreSigintHandler(): handles ctrl-c 
+ *********************/
+void foreSigintHandler(int signo) {
+  char* message = "Process received ctrl-c\n";
+  write(STDOUT_FILENO,message,25);
+  fflush(stdout);
+  exit(4);
+}
+
 
 /*********************
  * sigstpHandler(): handles ctrl-z 
@@ -94,6 +109,19 @@ void redirectOut(char* file) {
 }
 
 /*********************
+ * getStatus(): gets status of last command
+ *********************/
+void getStatus(int s) {
+  if (WIFEXITED(s)) {
+    printf("exit value %d\n",s);
+    fflush(stdout);
+  } else {
+    printf("terminated by signal %d\n", WTERMSIG(s));
+    fflush(stdout);
+  }
+}
+
+/*********************
  * execute(): process commandline options and exec 
  *********************/
 void execute(char* command,int* spawnExit) {
@@ -143,6 +171,7 @@ void execute(char* command,int* spawnExit) {
   }
   /*fork the process*/
   pid_t spawnpid = -5;
+
   spawnpid = fork();
   switch (spawnpid) {
     case -1:
@@ -151,8 +180,13 @@ void execute(char* command,int* spawnExit) {
       exit(1);
       break;
     case 0:
-      //reset sigint for the child
-      signal(SIGINT,SIG_DFL);
+      //ignore sigtstp for the child
+      signal(SIGTSTP,SIG_IGN);
+      //set sigint handler for foreground
+      if (background == 0) {
+        signal(SIGINT,SIG_DFL);
+      }
+      /*execute command*/ 
       if (argCount < MAX_ARGS) { 
         execvp(arguments[0],arguments);
         exit(1);
@@ -163,14 +197,15 @@ void execute(char* command,int* spawnExit) {
       break;
     default:
       if (toggleBackgroundProc == 1 && background == 1) {
-        printf("Running child [%d] in background\n",spawnpid);
+        printf("background pid is %d\n",spawnpid);
         fflush(stdout);
-        spawnpid = waitpid(spawnpid,spawnExit,WNOHANG);
+        spawnpid = waitpid(spawnpid,NULL,WNOHANG);
       } else {
-        printf("Running child [%d] in foreground\n",spawnpid);
-        fflush(stdout);
         spawnpid = waitpid(spawnpid,spawnExit,0);
-        printf("Execute: Child process [%d] has terminated with exit status %d\n",(int)spawnpid,*spawnExit); 
+        /*use getStatus to get the signal if terminated by signal*/
+        if (WIFSIGNALED(spawnExit)) {
+          getStatus(*spawnExit);
+        }
       }
       break;
   }
@@ -209,18 +244,11 @@ void changeDir(char* dir) {
 }
 
 /*********************
- * getStatus(): gets status of last command 
- *********************/
-void getStatus() {
-
-}
-
-/*********************
  * processCmd(): processes string into commands 
  *********************/
 void processCmd(char* rawCmd) {
   char* cmd;
-  int exitStatus = -5;
+  int exitStatus = 0;
   int lastChar = -1;
   //get first string
   int i;
@@ -242,26 +270,28 @@ void processCmd(char* rawCmd) {
   } else if (strcmp(cmd,"cd") == 0) {
     changeDir(rawCmd);
   } else if (strcmp(cmd,"status") == 0) {
-    getStatus();
+    getStatus(lastForegroundStatus);
   } else {
+    if (cmd != 0) {
+      free(cmd);
+      cmd = 0;
+    }
     //run anything non-native
     execute(rawCmd,&exitStatus);
   }
-  
-  free(cmd);
-  /*check for dead child*/
-  pid_t lastDead = deadChildPid;
-  if (deadChildPid != lastDead) {
-    printf("Child process [%d] has terminated with exit status %d\n",(int)deadChildPid,deadChildStatus);
-    lastDead = deadChildPid;
+  if (cmd != 0) {
+    free(cmd);
+    cmd = 0;
   }
-}
+  lastForegroundStatus = exitStatus;
+ }
 
 /*********************
  * getInput(): gets user input and recovers
  * from sigtstp handler during fgets 
  *********************/
 char* getInput() {
+  
   int idx = 0;
   char* line = NULL;
   line = malloc((MAX_CHARS + 1) * sizeof(char));
@@ -305,14 +335,14 @@ int main() {
   signal(SIGINT,SIG_IGN);
   
   //handle ctrl+z
-  struct sigaction sa_sigtstp = {0};
+  struct sigaction sa_sigtstp = {{0}};
   sa_sigtstp.sa_handler = sigstpHandler; 
   sigfillset(&sa_sigtstp.sa_mask);
   sa_sigtstp.sa_flags = 0;
   sigaction(SIGTSTP, &sa_sigtstp, NULL);
   
   //handle child process termination
-  struct sigaction sa_sigchld = {0};
+  struct sigaction sa_sigchld = {{0}};
   sa_sigchld.sa_handler = sigchldHandler; 
   sigfillset(&sa_sigchld.sa_mask);
   sa_sigchld.sa_flags = SA_RESTART | SA_NOCLDSTOP;
@@ -322,15 +352,17 @@ int main() {
   //endless loop; exit will terminate shell from
   //processCmd function
   while (1 == 1) {
-    /*check for dead child*/
+    sleep(1);
+      /*check for dead child*/
     if (deadChildPid != lastDead) {
-      printf("Child process [%d] has terminated with exit status %d\n",(int)deadChildPid,deadChildStatus);
+      printf("background pid %d is done: ",(int)deadChildPid);
+      getStatus(deadChildStatus);
       lastDead = deadChildPid;
     }
-    /*get and process input*/
+      /*get and process input*/
     char* command = 0;
     command = getInput(command); 
-    /*skip all processing for comments and empty strings*/
+      /*skip all processing for comments and empty strings*/
     if (command != 0 && command[0] != '#' && command[0] != '\0' && command[0] != '\n') {
       processCmd(command); 
     }
