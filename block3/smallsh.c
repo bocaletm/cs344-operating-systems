@@ -77,6 +77,28 @@ void sigchldHandler(int signo) {
 }
 
 /*********************
+ * inDevNull(): performs output redirection 
+ *********************/
+void inDevNull() {
+  char* filepath = malloc(11 * sizeof(char));
+  memset(filepath,'\0',11);
+  snprintf(filepath,10,"/dev/null"); 
+  /*open a file*/
+  int sourceFD = open(filepath, O_RDONLY);
+  if (sourceFD == -1) { 
+    printf("open() failed on %s\n",filepath); 
+    fflush(stdout);
+  }
+  /*redirect input*/
+  int result = dup2(sourceFD,0);
+  if (result == -1) { 
+    printf("dup2() failed on input file %s\n",filepath); 
+    fflush(stdout);
+  }
+  free(filepath);
+}
+
+/*********************
  * redirectIn(): performs input redirection 
  *********************/
 void redirectIn(char* file) {
@@ -92,7 +114,7 @@ void redirectIn(char* file) {
   if (noerror) {
     snprintf(filepath,256,"%s/%s",filepath,file); 
     /*open a file*/
-    int sourceFD = open(file, O_RDONLY);
+    int sourceFD = open(filepath, O_RDONLY);
     if (sourceFD == -1) { 
       printf("open() failed on %s\n",file); 
       fflush(stdout);
@@ -103,6 +125,28 @@ void redirectIn(char* file) {
       printf("dup2() failed on input file %s\n",file); 
       fflush(stdout);
     }
+  }
+  free(filepath);
+}
+
+/*********************
+ * outDevNull(): performs output redirection 
+ *********************/
+void outDevNull() {
+  char* filepath = malloc(11 * sizeof(char));
+  memset(filepath,'\0',11);
+  snprintf(filepath,10,"/dev/null"); 
+  /*open a file*/
+  int targetFD = open(filepath, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+  if (targetFD == -1) { 
+    printf("open() failed on %s\n",filepath); 
+    fflush(stdout);
+  }
+  /*redirect output*/
+  int result = dup2(targetFD,1);
+  if (result == -1) { 
+    printf("dup2() failed on output file %s\n",filepath); 
+    fflush(stdout);
   }
   free(filepath);
 }
@@ -120,23 +164,30 @@ void redirectOut(char* file) {
     fflush(stdout);
     noerror = 0;
   }
+  char* tempStr = malloc(256 * sizeof(char));
+  memset(tempStr,'\0',256);
+  strncpy(tempStr,filepath,255);
+  printf("%s\n",tempStr);
+  fflush(stdout);
   if (noerror) {
-    snprintf(filepath,256,"%s/%s",filepath,file); 
+    memset(filepath,'\0',256);
+    snprintf(filepath,255,"%s/%s",tempStr,file); 
 
     /*open a file*/
-    int targetFD = open(file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    int targetFD = open(filepath, O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (targetFD == -1) { 
-      printf("open() failed on %s\n",file); 
+      printf("open() failed on %s\n",filepath); 
       fflush(stdout);
     }
     /*redirect output*/
     int result = dup2(targetFD,1);
     if (result == -1) { 
-      printf("dup2() failed on output file %s\n",file); 
+      printf("dup2() failed on output file %s\n",filepath); 
       fflush(stdout);
     }
   }
   free(filepath);
+  free(tempStr);
 }
 
 /*********************
@@ -226,6 +277,8 @@ void execute(char* command,int* spawnExit) {
       /*redirect if necessary*/
       if (redirection[0] != 0) {
         redirectIn(redirection[0]);
+      } else {
+        inDevNull();
       }
       if (redirection[1] != 0) {
         redirectOut(redirection[1]);
@@ -247,8 +300,11 @@ void execute(char* command,int* spawnExit) {
       } else {
         spawnpid = waitpid(spawnpid,spawnExit,0);
         /*use getStatus to get the signal if terminated by signal*/
-        if (WIFSIGNALED(spawnExit)) {
-          getStatus(*spawnExit);
+        if (WIFSIGNALED(*spawnExit) == 1) {
+          printf("%d\n",WTERMSIG(*spawnExit));
+          fflush(stdout);
+        } else {
+          lastForegroundStatus = *spawnExit;
         }
       }
       break;
@@ -327,7 +383,6 @@ void processCmd(char* rawCmd) {
     free(cmd);
     cmd = 0;
   }
-  lastForegroundStatus = exitStatus;
  }
 
 /*********************
