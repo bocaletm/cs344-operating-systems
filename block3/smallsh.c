@@ -19,7 +19,7 @@
 
 /*globals for handlers*/
 int toggleBackgroundProc = 1;
-pid_t deadChildPid = NULL;
+pid_t deadChildPid = (pid_t)0;
 int deadChildStatus = -5;
 int redirectionError = 0;
 
@@ -427,7 +427,7 @@ void processCmd(char* rawCmd) {
   //get first string
   int i;
   for (i = 0; i < MAX_CHARS; i++) {
-    if (rawCmd[i] == ' ' || rawCmd[i] == '\n' || rawCmd == '\0') {
+    if (rawCmd[i] == ' ' || rawCmd[i] == '\n' || rawCmd == 0) {
         break;
     }
     lastChar++;
