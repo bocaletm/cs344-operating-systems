@@ -239,7 +239,7 @@ void execute(char* command,int* spawnExit) {
   for (i = 0; i < MAX_CHARS - 7; i++) {
     tempStr[i] = '\0';
   }
-
+  
   /*necessary for strtok*/ 
   const char space[2] = " ";
   /*array to point to individual tokens*/
@@ -254,8 +254,13 @@ void execute(char* command,int* spawnExit) {
   redirection[0] = 0;
   redirection[1] = 0;
 
-  /*parse the command*/
-      //tokenize command
+  /*activate background*/
+  if (command[strlen(command) - 1] == '&' && command[strlen(command) -2] == ' ') {
+    background = 1 - background;
+    //clean ampersand from string
+    command[strlen(command) - 2] = '\0';
+  }
+    //tokenize command
   char* token = strtok(command,space);
   char* position;
   while (token != NULL) {
@@ -270,14 +275,12 @@ void execute(char* command,int* spawnExit) {
             arguments[argCount] = tempStr;
       argCount++;
       token = strtok(NULL,space);
+      //set redirection flags for next token
     } else if (strcmp(token,"<") == 0) {
       redirectInBool = 1 - redirectInBool;
       token = strtok(NULL,space);
     } else if (strcmp(token,">") == 0) {
       redirectOutBool = 1 - redirectOutBool;
-      token = strtok(NULL,space);
-    } else if (strcmp(token,"&") == 0) {
-      background = 1 - background;
       token = strtok(NULL,space);
     } else {
       /*handle redirection and reset redirection flags*/
@@ -301,6 +304,7 @@ void execute(char* command,int* spawnExit) {
   pid_t parentPid = getpid(); 
   pid_t spawnpid = -5;
   spawnpid = fork();
+  int exec_return = 0;
   switch (spawnpid) {
     case -1:
       printf("Fork error. Exiting.\n");
@@ -328,7 +332,12 @@ void execute(char* command,int* spawnExit) {
       /*execute command*/ 
       if (argCount < MAX_ARGS) {
         if (redirectionError == 0) { 
-          execvp(arguments[0],arguments);
+          exec_return = execvp(arguments[0],arguments);
+          if (exec_return < 0) {
+            printf("%s: no such file or directory\n",arguments[0]);
+            fflush(stdout);
+          }
+        } else {
           redirectionError = 0;
         }
       } else {

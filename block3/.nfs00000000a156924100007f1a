@@ -100,12 +100,9 @@ echo --------------------
 echo pwd (5 points for being in the newly created dir)
 pwd
 echo --------------------
-echo
-echo --------------------
+sleep 2
 echo Testing foreground-only mode (20 points for entry & exit text AND ~5 seconds between times)
-echo
-echo --------------------
-
+sleep 2
 kill -SIGTSTP $$
 date
 sleep 5 &
