@@ -1,0 +1,6 @@
+To compile:
+  1 Extract makefile and smallsh.c in the same folder
+  2 Type make
+    NOTE: If make is not installed, run the following command:
+
+gcc -g -Wall -o smallsh smallsh.c 
