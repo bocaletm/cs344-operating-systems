@@ -105,6 +105,7 @@ void inDevNull(pid_t parent) {
   if (error == 1) {
     printf("cannot open %s for input\n",filepath); 
     fflush(stdout);
+    redirectionError = 1;
   }
 }
 
@@ -128,6 +129,7 @@ void redirectIn(char* file, pid_t parent) {
   if (error == 1) {
     printf("cannot open %s for input\n",file); 
     fflush(stdout);
+    redirectionError = 1;
   }
 }
 
@@ -159,8 +161,8 @@ void outDevNull(pid_t parent) {
   if (error == 1) {
     printf("cannot open %s for output\n",filepath); 
     fflush(stdout);
+    redirectionError = 1;
   }
-
 }
 
 /*********************
@@ -171,21 +173,19 @@ void redirectOut(char* file,pid_t parent) {
     /*open a file*/
     int targetFD = open(file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (targetFD == -1) { 
-      printf("open() failed on %s\n",file); 
-      fflush(stdout);
       error = 1;
     }
     /*redirect output*/
     int result = dup2(targetFD,1);
     if (result == -1) { 
-      printf("dup2() failed on output file %s\n",file); 
-      fflush(stdout);
       error = 1;
     }
     //close on exec
     fcntl(targetFD,F_SETFD,FD_CLOEXEC);
     if (error == 1) {
-      kill(parent,SIGCONT);
+      printf("cannot open %s for output\n",file); 
+      fflush(stdout);
+      redirectionError = 1;
     }
 }
 
@@ -206,11 +206,17 @@ void execute(char* command,int* spawnExit) {
   int redirectInBool = 0;
   int redirectOutBool = 0;
 
+  int i;
+  /*parent pid*/
+  char parent_pid[8];
+  for (i = 0; i < 8; i++) {
+    parent_pid[i] = '\0';
+  }  
+
   /*necessary for strtok*/ 
   const char space[2] = " ";
   /*array to point to individual tokens*/
   char* arguments[MAX_ARGS + 1];
-  int i;
   for (i = 0; i < MAX_ARGS + 1; i ++) {
     arguments[i] = NULL;
   }
@@ -225,7 +231,12 @@ void execute(char* command,int* spawnExit) {
       //tokenize command
   char* token = strtok(command,space);
   while (token != NULL) {
-    if (strcmp(token,"<") == 0) {
+    if (strstr(token,"$$")) {
+      snprintf(parent_pid,(size_t)7,"%d",getpid());
+      arguments[argCount] = parent_pid;
+      argCount++;
+      token = strtok(NULL,space);
+    } else if (strcmp(token,"<") == 0) {
       redirectInBool = 1 - redirectInBool;
       token = strtok(NULL,space);
     } else if (strcmp(token,">") == 0) {
@@ -284,6 +295,7 @@ void execute(char* command,int* spawnExit) {
       if (argCount < MAX_ARGS) {
         if (redirectionError == 0) { 
           execvp(arguments[0],arguments);
+          redirectionError = 0;
         }
       } else {
         printf("Max number of arguments exceeded. Try again.\n");
@@ -461,7 +473,13 @@ int main() {
       /*check for dead child*/
     if (deadChildPid != lastDead) {
       printf("background pid %d is done: ",(int)deadChildPid);
-      getStatus(deadChildStatus);
+      fflush(stdout);
+      if (WIFSIGNALED(deadChildStatus)) {
+        printf("terminated by signal %d\n",WTERMSIG(deadChildStatus));
+        fflush(stdout);
+      } else { 
+        getStatus(deadChildStatus);
+      }
       lastDead = deadChildPid;
     }
       /*get and process input*/
