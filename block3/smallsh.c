@@ -21,6 +21,7 @@
 int toggleBackgroundProc = 1;
 pid_t deadChildPid = NULL;
 int deadChildStatus = -5;
+int redirectionError = 0;
 
 /*global for last status*/
 int lastForegroundStatus = 0;
@@ -34,13 +35,13 @@ void sigchldHandler(int);
 
 
 /*********************
- * foreSigintHandler(): handles ctrl-c 
+ * sigusr1Handler(): handles file redirection errors 
  *********************/
-void foreSigintHandler(int signo) {
-  char* message = "Process received ctrl-c\n";
-  write(STDOUT_FILENO,message,25);
+void sigusr1Handler(int signo) {
+  redirectionError = 1;
+  char* message1 = "usr\n";
+  write(STDOUT_FILENO,message1,4);
   fflush(stdout);
-  exit(4);
 }
 
 
@@ -79,7 +80,7 @@ void sigchldHandler(int signo) {
 /*********************
  * inDevNull(): performs output redirection 
  *********************/
-void inDevNull() {
+void inDevNull(pid_t parent) {
   char* filepath = malloc(11 * sizeof(char));
   memset(filepath,'\0',11);
   snprintf(filepath,10,"/dev/null"); 
@@ -88,51 +89,46 @@ void inDevNull() {
   if (sourceFD == -1) { 
     printf("open() failed on %s\n",filepath); 
     fflush(stdout);
+    kill(parent,SIGUSR1);
   }
   /*redirect input*/
   int result = dup2(sourceFD,0);
   if (result == -1) { 
     printf("dup2() failed on input file %s\n",filepath); 
     fflush(stdout);
+    kill(parent,SIGUSR1);
   }
   free(filepath);
+  //close on exec
+  fcntl(sourceFD,F_SETFD,FD_CLOEXEC);
 }
 
 /*********************
  * redirectIn(): performs input redirection 
  *********************/
-void redirectIn(char* file) {
-  int noerror = 1;
-  /*get full path to file*/
-  char* filepath = malloc(256 * sizeof(char));
-  memset(filepath,'\0',256);
-  if (getcwd(filepath,sizeof(filepath) == 0)) {
-    printf("getcwd() error in redirectOut()\n");
+void redirectIn(char* file, pid_t parent) {
+  /*open a file*/
+  int sourceFD = open(file, O_RDONLY);
+  if (sourceFD == -1) { 
+    printf("open() failed on %s\n",file); 
     fflush(stdout);
-    noerror = 0;
+    kill(parent,SIGUSR1);
   }
-  if (noerror) {
-    snprintf(filepath,256,"%s/%s",filepath,file); 
-    /*open a file*/
-    int sourceFD = open(filepath, O_RDONLY);
-    if (sourceFD == -1) { 
-      printf("open() failed on %s\n",file); 
-      fflush(stdout);
-    }
-    /*redirect input*/
-    int result = dup2(sourceFD,0);
-    if (result == -1) { 
-      printf("dup2() failed on input file %s\n",file); 
-      fflush(stdout);
-    }
+  /*redirect input*/
+  int result = dup2(sourceFD,0);
+  if (result == -1) { 
+    printf("dup2() failed on input file %s\n",file); 
+    fflush(stdout);
+    kill(parent,SIGUSR1);
   }
-  free(filepath);
+  //close on exec
+  fcntl(sourceFD,F_SETFD,FD_CLOEXEC);
 }
 
 /*********************
  * outDevNull(): performs output redirection 
  *********************/
-void outDevNull() {
+void outDevNull(pid_t parent) {
   char* filepath = malloc(11 * sizeof(char));
   memset(filepath,'\0',11);
   snprintf(filepath,10,"/dev/null"); 
@@ -141,62 +137,58 @@ void outDevNull() {
   if (targetFD == -1) { 
     printf("open() failed on %s\n",filepath); 
     fflush(stdout);
+    kill(parent,SIGUSR1);
   }
   /*redirect output*/
   int result = dup2(targetFD,1);
   if (result == -1) { 
     printf("dup2() failed on output file %s\n",filepath); 
     fflush(stdout);
+    kill(parent,SIGUSR1);
   }
   free(filepath);
+  //close on exec
+  fcntl(targetFD,F_SETFD,FD_CLOEXEC);
 }
 
 /*********************
  * redirectOut(): performs output redirection 
  *********************/
-void redirectOut(char* file) {
-  int noerror = 1;
-  /*get full path to file*/
-  char* filepath = malloc(256 * sizeof(char));
-  memset(filepath,'\0',256);
-  if (getcwd(filepath,sizeof(filepath) == 0)) {
-    printf("getcwd() error in redirectOut()\n");
-    fflush(stdout);
-    noerror = 0;
-  }
-  char* tempStr = malloc(256 * sizeof(char));
-  memset(tempStr,'\0',256);
-  strncpy(tempStr,filepath,255);
-  printf("%s\n",tempStr);
-  fflush(stdout);
-  if (noerror) {
-    memset(filepath,'\0',256);
-    snprintf(filepath,255,"%s/%s",tempStr,file); 
-
+void redirectOut(char* file,pid_t parent) {
     /*open a file*/
-    int targetFD = open(filepath, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    int targetFD = open(file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (targetFD == -1) { 
-      printf("open() failed on %s\n",filepath); 
+      printf("open() failed on %s\n",file); 
       fflush(stdout);
+      kill(parent,SIGUSR1);
     }
     /*redirect output*/
     int result = dup2(targetFD,1);
     if (result == -1) { 
-      printf("dup2() failed on output file %s\n",filepath); 
+      printf("dup2() failed on output file %s\n",file); 
       fflush(stdout);
+      kill(parent,SIGUSR1);
     }
-  }
-  free(filepath);
-  free(tempStr);
+    //close on exec
+    fcntl(targetFD,F_SETFD,FD_CLOEXEC);
 }
 
 /*********************
  * getStatus(): gets status of last command
  *********************/
 void getStatus(int s) {
+  printf("RE value %d\n",redirectionError);
+  fflush(stdout);
+
   if (WIFEXITED(s)) {
-    printf("exit value %d\n",s);
-    fflush(stdout);
+    if (redirectionError != 0) {
+      printf("exit value %d\n",redirectionError);
+      fflush(stdout);
+      redirectionError = 0;
+    } else {
+      printf("exit value %d\n",lastForegroundStatus);
+      fflush(stdout);
+    }
   } else {
     printf("terminated by signal %d\n", WTERMSIG(s));
     fflush(stdout);
@@ -227,7 +219,6 @@ void execute(char* command,int* spawnExit) {
   redirection[0] = 0;
   redirection[1] = 0;
 
- 
   /*parse the command*/
       //tokenize command
   char* token = strtok(command,space);
@@ -246,9 +237,11 @@ void execute(char* command,int* spawnExit) {
       if (redirectInBool) {
         redirection[0] = token;
         redirectInBool = 1 - redirectInBool;
+        token = strtok(NULL,space);
       } else if (redirectOutBool) {
         redirection[1] = token;
         redirectOutBool = 1 - redirectOutBool;
+        token = strtok(NULL,space);
       } else {
         /*add argument to exec argument list*/
         arguments[argCount] = token;
@@ -258,39 +251,42 @@ void execute(char* command,int* spawnExit) {
     }
   }
   /*fork the process*/
+  pid_t parentPid = getpid(); 
   pid_t spawnpid = -5;
-
   spawnpid = fork();
   switch (spawnpid) {
     case -1:
       printf("Fork error. Exiting.\n");
       fflush(stdout);
-      exit(1);
+      lastForegroundStatus = 1;
       break;
     case 0:
       //ignore sigtstp for the child
       signal(SIGTSTP,SIG_IGN);
+      signal(SIGUSR1,SIG_IGN);
       //set sigint handler for foreground
       if (background == 0) {
         signal(SIGINT,SIG_DFL);
       }
       /*redirect if necessary*/
       if (redirection[0] != 0) {
-        redirectIn(redirection[0]);
-      } else {
-        inDevNull();
+        redirectIn(redirection[0],parentPid);
+      } else if (background == 1) {
+        inDevNull(parentPid);
       }
       if (redirection[1] != 0) {
-        redirectOut(redirection[1]);
+        redirectOut(redirection[1],parentPid);
+      } else if (background == 1) {
+        outDevNull(parentPid);
       }
       /*execute command*/ 
       if (argCount < MAX_ARGS) { 
         execvp(arguments[0],arguments);
-        exit(1);
       } else {
         printf("Max number of arguments exceeded. Try again.\n");
         fflush(stdout);
-      }   
+      }
+      exit(1);
       break;
     default:
       if (toggleBackgroundProc == 1 && background == 1) {
@@ -299,9 +295,9 @@ void execute(char* command,int* spawnExit) {
         spawnpid = waitpid(spawnpid,NULL,WNOHANG);
       } else {
         spawnpid = waitpid(spawnpid,spawnExit,0);
-        /*use getStatus to get the signal if terminated by signal*/
+        /*get the signal if terminated by signal*/
         if (WIFSIGNALED(*spawnExit) == 1) {
-          printf("%d\n",WTERMSIG(*spawnExit));
+          printf("terminated with signal%d\n",WTERMSIG(*spawnExit));
           fflush(stdout);
         } else {
           lastForegroundStatus = *spawnExit;
@@ -446,6 +442,13 @@ int main() {
   sigfillset(&sa_sigchld.sa_mask);
   sa_sigchld.sa_flags = SA_RESTART | SA_NOCLDSTOP;
   sigaction(SIGCHLD, &sa_sigchld, NULL);
+  
+  //handle redirection errors in child process
+  struct sigaction sa_sigusr1 = {{0}};
+  sa_sigusr1.sa_handler = sigusr1Handler; 
+  sigfillset(&sa_sigusr1.sa_mask);
+  sa_sigusr1.sa_flags = 0;
+  sigaction(SIGUSR1, &sa_sigusr1, NULL);
   
   pid_t lastDead = deadChildPid;
   //endless loop; exit will terminate shell from
