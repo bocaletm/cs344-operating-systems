@@ -7,6 +7,7 @@
 
 
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -16,9 +17,33 @@
 #include <signal.h>
 #include <fcntl.h>
 
+/*globals for handlers*/
 int toggleBackgroundProc = 1;
+pid_t deadChildPid = NULL;
+int deadChildStatus = -5;
+int redirectionError = 0;
+
+/*global for last status*/
+int lastForegroundStatus = 0;
+
+/*comand limits*/
 const int MAX_CHARS = 2048;
+const int MAX_ARGS = 512;
+
 void sigstpHandler(int);
+void sigchldHandler(int);
+
+
+/*********************
+ * sigcontHandler(): handles file redirection errors 
+ *********************/
+void sigcontHandler(int signo) {
+  redirectionError = 1;
+  char* message1 = "usr\n";
+  write(STDOUT_FILENO,message1,4);
+  fflush(stdout);
+}
+
 
 /*********************
  * sigstpHandler(): handles ctrl-z 
@@ -40,10 +65,304 @@ void sigstpHandler(int signo) {
 }
 
 /*********************
- * execute(): performs I/O redirection and exec 
+ * sigchldHandler(): handles child process termination 
  *********************/
-void execute(char* command) {
-  //  exec(command);
+void sigchldHandler(int signo) {
+  pid_t p;
+  int status = -6;
+  /*reap what you sow*/
+  while ((p=waitpid((pid_t)(-1),&status,WNOHANG)) > 0) {
+    deadChildPid = p;
+    deadChildStatus = status;
+  }
+}
+
+/*********************
+ * inDevNull(): performs output redirection 
+ *********************/
+void inDevNull(pid_t parent) {
+  int error = 0;
+  char* filepath = 0;
+  filepath = malloc(11 * sizeof(char));
+  memset(filepath,'\0',11);
+  snprintf(filepath,10,"/dev/null"); 
+  /*open a file*/
+  int sourceFD = open(filepath, O_RDONLY);
+  if (sourceFD == -1) {
+    error = 1; 
+  }
+  /*redirect input*/
+  int result = dup2(sourceFD,0);
+  if (result == -1) { 
+    error = 1;
+  }
+  if (filepath != 0) {
+      free(filepath);
+      filepath = 0;
+  }
+  //close on exec
+  fcntl(sourceFD,F_SETFD,FD_CLOEXEC);
+  if (error == 1) {
+    printf("cannot open %s for input\n",filepath); 
+    fflush(stdout);
+    redirectionError = 1;
+  }
+}
+
+/*********************
+ * redirectIn(): performs input redirection 
+ *********************/
+void redirectIn(char* file, pid_t parent) {
+  int error = 0;
+  /*open a file*/
+  int sourceFD = open(file, O_RDONLY);
+  if (sourceFD == -1) { 
+    error = 1;
+  }
+  /*redirect input*/
+  int result = dup2(sourceFD,0);
+  if (result == -1) { 
+    error = 1;
+  }
+  //close on exec
+  fcntl(sourceFD,F_SETFD,FD_CLOEXEC);
+  if (error == 1) {
+    printf("cannot open %s for input\n",file); 
+    fflush(stdout);
+    redirectionError = 1;
+  }
+}
+
+/*********************
+ * outDevNull(): performs output redirection 
+ *********************/
+void outDevNull(pid_t parent) {
+  int error = 0;
+  char* filepath =  0;
+  filepath = malloc(11 * sizeof(char));
+  memset(filepath,'\0',11);
+  snprintf(filepath,10,"/dev/null"); 
+  /*open a file*/
+  int targetFD = open(filepath, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+  if (targetFD == -1) { 
+    error = 1;
+  }
+  /*redirect output*/
+  int result = dup2(targetFD,1);
+  if (result == -1) { 
+    error = 1;
+  }
+  if (filepath != 0) {
+      free(filepath);
+      filepath = 0;
+  }
+  //close on exec
+  fcntl(targetFD,F_SETFD,FD_CLOEXEC);
+  if (error == 1) {
+    printf("cannot open %s for output\n",filepath); 
+    fflush(stdout);
+    redirectionError = 1;
+  }
+}
+
+/*********************
+ * redirectOut(): performs output redirection 
+ *********************/
+void redirectOut(char* file,pid_t parent) {
+    int error = 0;
+    /*open a file*/
+    int targetFD = open(file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (targetFD == -1) { 
+      error = 1;
+    }
+    /*redirect output*/
+    int result = dup2(targetFD,1);
+    if (result == -1) { 
+      error = 1;
+    }
+    //close on exec
+    fcntl(targetFD,F_SETFD,FD_CLOEXEC);
+    if (error == 1) {
+      printf("cannot open %s for output\n",file); 
+      fflush(stdout);
+      redirectionError = 1;
+    }
+}
+
+/*********************
+ * getStatus(): gets status of last command
+ *********************/
+void getStatus(int s) {
+  printf("exit value %d\n",lastForegroundStatus);
+  fflush(stdout);
+}
+
+/*********************
+ * substitute(): substitutes a substring within another
+ * ******************/
+void substitute(char* source,char* destination,char* toSub, int pos) {
+  int i;
+  int dest_idx = 0;
+  int skip_idx = pos;
+  for (i = 0; i < pos; i++) {
+    destination[i] = source[i];
+    dest_idx++;
+  }
+  skip_idx+=2;
+  for (i = 0; i < strlen(toSub); i++) {
+   destination[dest_idx] = toSub[i];
+   dest_idx++; 
+  }
+  for (i = dest_idx; i <= (strlen(source) + 2); i++) {
+    //skipping dollar signs
+    destination[dest_idx] = source[skip_idx];
+    dest_idx++;
+    skip_idx++;
+  }
+}
+
+/*********************
+ * execute(): process commandline options and exec 
+ *********************/
+void execute(char* command,int* spawnExit) {
+  /*bools to process commandline options */
+  int background = 0;
+  int redirectInBool = 0;
+  int redirectOutBool = 0;
+  int i;
+  /*parent pid*/
+  char parent_pid[8];
+  for (i = 0; i < 8; i++) {
+    parent_pid[i] = '\0';
+  }
+  char tempStr[MAX_CHARS - 7];  
+  for (i = 0; i < MAX_CHARS - 7; i++) {
+    tempStr[i] = '\0';
+  }
+  
+  /*necessary for strtok*/ 
+  const char space[2] = " ";
+  /*array to point to individual tokens*/
+  char* arguments[MAX_ARGS + 1];
+  for (i = 0; i < MAX_ARGS + 1; i ++) {
+    arguments[i] = NULL;
+  }
+  int argCount = 0;
+  
+  /*array to hold pointers to redirection strings*/
+  char* redirection[2];
+  redirection[0] = 0;
+  redirection[1] = 0;
+
+  /*activate background*/
+  if (command[strlen(command) - 1] == '&' && command[strlen(command) -2] == ' ') {
+    background = 1 - background;
+    //clean ampersand from string
+    command[strlen(command) - 2] = '\0';
+  }
+    //tokenize command
+  char* token = strtok(command,space);
+  char* position;
+  while (token != NULL) {
+    /*handle substitution*/
+    position = strstr(token,"$$");
+    if (position) {
+      position = (char*)(position - token);
+      /*get the shell pid*/
+      snprintf(parent_pid,(size_t)7,"%d",getpid());
+      substitute(token,tempStr,parent_pid,(unsigned long)position);
+      /*add substituted command to arguments*/
+            arguments[argCount] = tempStr;
+      argCount++;
+      token = strtok(NULL,space);
+      //set redirection flags for next token
+    } else if (strcmp(token,"<") == 0) {
+      redirectInBool = 1 - redirectInBool;
+      token = strtok(NULL,space);
+    } else if (strcmp(token,">") == 0) {
+      redirectOutBool = 1 - redirectOutBool;
+      token = strtok(NULL,space);
+    } else {
+      /*handle redirection and reset redirection flags*/
+      if (redirectInBool) {
+        redirection[0] = token;
+        redirectInBool = 1 - redirectInBool;
+        token = strtok(NULL,space);
+      } else if (redirectOutBool) {
+        redirection[1] = token;
+        redirectOutBool = 1 - redirectOutBool;
+        token = strtok(NULL,space);
+      } else {
+        /*add argument to exec argument list*/
+        arguments[argCount] = token;
+        argCount++;
+        token = strtok(NULL,space);
+      }
+    }
+  }
+  /*fork the process*/
+  pid_t parentPid = getpid(); 
+  pid_t spawnpid = -5;
+  spawnpid = fork();
+  int exec_return = 0;
+  switch (spawnpid) {
+    case -1:
+      printf("Fork error. Exiting.\n");
+      fflush(stdout);
+      lastForegroundStatus = 1;
+      break;
+    case 0:
+      //ignore sigtstp for the child
+      signal(SIGTSTP,SIG_IGN);
+      //set sigint handler for foreground
+      if (background == 0) {
+        signal(SIGINT,SIG_DFL);
+      }
+      /*redirect if necessary*/
+      if (redirection[0] != 0) {
+        redirectIn(redirection[0],parentPid);
+      } else if (background == 1) {
+        inDevNull(parentPid);
+      }
+      if (redirection[1] != 0) {
+        redirectOut(redirection[1],parentPid);
+      } else if (background == 1) {
+        outDevNull(parentPid);
+      }
+      /*execute command*/ 
+      if (argCount < MAX_ARGS) {
+        if (redirectionError == 0) { 
+          exec_return = execvp(arguments[0],arguments);
+          if (exec_return < 0) {
+            printf("%s: no such file or directory\n",arguments[0]);
+            fflush(stdout);
+          }
+        } else {
+          redirectionError = 0;
+        }
+      } else {
+        printf("Max number of arguments exceeded. Try again.\n");
+        fflush(stdout);
+      }
+      exit(1);
+      break;
+    default:
+      if (toggleBackgroundProc == 1 && background == 1) {
+        printf("background pid is %d\n",spawnpid);
+        fflush(stdout);
+        spawnpid = waitpid(spawnpid,NULL,WNOHANG);
+      } else {
+        spawnpid = waitpid(spawnpid,spawnExit,0);
+        /*get the signal if terminated by signal*/
+        if (WIFSIGNALED(*spawnExit) == 1) {
+          printf("terminated by signal %d\n",WTERMSIG(*spawnExit));
+          fflush(stdout);
+        } else {
+          lastForegroundStatus = WEXITSTATUS(*spawnExit);
+        }
+      }
+      break;
+  }
 }
 /*********************
  * exitGracefully(): kills any processes and jobs
@@ -57,6 +376,26 @@ void exitGracefully() {
  * changeDir(): cd command 
  *********************/
 void changeDir(char* dir) {
+  int i;
+  /*variables for substitution*/
+  char parent_pid[8];
+  for (i = 0; i < 8; i++) {
+    parent_pid[i] = '\0';
+  }
+  char tempStr[MAX_CHARS - 7];  
+  for (i = 0; i < MAX_CHARS - 7; i++) {
+    tempStr[i] = '\0';
+  }
+
+  /*handle substitution*/
+  char*  position = strstr(dir,"$$");
+  if (position) {
+    position = (char*)(position - dir);
+    /*get the shell pid*/
+    snprintf(parent_pid,(size_t)7,"%d",getpid());
+    substitute(dir,tempStr,parent_pid,(unsigned long)position);
+  }
+  
   /*position of cd argument start*/
   int dirStart = 3;
   int err = -5;
@@ -67,26 +406,15 @@ void changeDir(char* dir) {
   if (dir[dirStart] == '\0') {
       err = chdir(getenv("HOME"));
   } else {
-      token = strtok(dir,space);
-      while (token != NULL) {
-        printf("%s ",token);
-        fflush(stdout);
-        token = strtok(NULL,space);
-      }
+      /*use second space-delim string; ignore everything else*/
+      token = strtok(tempStr,space);
+      token = strtok(NULL,space);
+      err = chdir(token);
    }
-    //cleanDir = malloc(255 * sizeof(char));
-    //err = chdir
-    //free();  
   if (err == -1) {
-    printf("Could not change directories\n");
+    printf("Could not find that directory\n");
+    fflush(stdout);
   }
-}
-
-/*********************
- * getStatus(): gets status of last command 
- *********************/
-void getStatus() {
-
 }
 
 /*********************
@@ -94,6 +422,7 @@ void getStatus() {
  *********************/
 void processCmd(char* rawCmd) {
   char* cmd;
+  int exitStatus = 0;
   int lastChar = -1;
   //get first string
   int i;
@@ -115,17 +444,27 @@ void processCmd(char* rawCmd) {
   } else if (strcmp(cmd,"cd") == 0) {
     changeDir(rawCmd);
   } else if (strcmp(cmd,"status") == 0) {
-    getStatus();
+    getStatus(lastForegroundStatus);
+  } else {
+    if (cmd != 0) {
+      free(cmd);
+      cmd = 0;
+    }
+    //run anything non-native
+    execute(rawCmd,&exitStatus);
   }
-  free(cmd);
-  //run anything non-native
-  execute(rawCmd);
-} 
+  if (cmd != 0) {
+    free(cmd);
+    cmd = 0;
+  }
+ }
+
 /*********************
  * getInput(): gets user input and recovers
  * from sigtstp handler during fgets 
  *********************/
 char* getInput() {
+  
   int idx = 0;
   char* line = NULL;
   line = malloc((MAX_CHARS + 1) * sizeof(char));
@@ -169,19 +508,48 @@ int main() {
   signal(SIGINT,SIG_IGN);
   
   //handle ctrl+z
-  struct sigaction sa_sigtstp = {0};
+  struct sigaction sa_sigtstp = {{0}};
   sa_sigtstp.sa_handler = sigstpHandler; 
   sigfillset(&sa_sigtstp.sa_mask);
   sa_sigtstp.sa_flags = 0;
   sigaction(SIGTSTP, &sa_sigtstp, NULL);
-
+  
+  //handle child process termination
+  struct sigaction sa_sigchld = {{0}};
+  sa_sigchld.sa_handler = sigchldHandler; 
+  sigfillset(&sa_sigchld.sa_mask);
+  sa_sigchld.sa_flags = SA_RESTART | SA_NOCLDSTOP;
+  sigaction(SIGCHLD, &sa_sigchld, NULL);
+  
+  //handle redirection errors in child process
+  struct sigaction sa_sigcont = {{0}};
+  sa_sigcont.sa_handler = sigcontHandler; 
+  sigfillset(&sa_sigcont.sa_mask);
+  sa_sigcont.sa_flags = 0;
+  sigaction(SIGCONT, &sa_sigcont, NULL);
+  
+  pid_t lastDead = deadChildPid;
   //endless loop; exit will terminate shell from
   //processCmd function
   while (1 == 1) {
+    sleep(1);
+      /*check for dead child*/
+    if (deadChildPid != lastDead) {
+      printf("background pid %d is done: ",(int)deadChildPid);
+      fflush(stdout);
+      if (WIFSIGNALED(deadChildStatus)) {
+        printf("terminated by signal %d\n",WTERMSIG(deadChildStatus));
+        fflush(stdout);
+      } else { 
+        getStatus(deadChildStatus);
+      }
+      lastDead = deadChildPid;
+    }
+      /*get and process input*/
     char* command = 0;
-    command = getInput(command);
-    /*skip all processing for comments*/
-    if (command[0] != '#') {
+    command = getInput(command); 
+      /*skip all processing for comments and empty strings*/
+    if (command != 0 && command[0] != '#' && command[0] != '\0' && command[0] != '\n') {
       processCmd(command); 
     }
     if (command != 0) {
