@@ -198,6 +198,30 @@ void getStatus(int s) {
 }
 
 /*********************
+ * substitute(): substitutes a substring within another
+ * ******************/
+void substitute(char* source,char* destination,char* toSub, int pos) {
+  int i;
+  int dest_idx = 0;
+  int skip_idx = pos;
+  for (i = 0; i < pos; i++) {
+    destination[i] = source[i];
+    dest_idx++;
+  }
+  skip_idx+=2;
+  for (i = 0; i < strlen(toSub); i++) {
+   destination[dest_idx] = toSub[i];
+   dest_idx++; 
+  }
+  for (i = dest_idx; i <= (strlen(source) + 2); i++) {
+    //skipping dollar signs
+    destination[dest_idx] = source[skip_idx];
+    dest_idx++;
+    skip_idx++;
+  }
+}
+
+/*********************
  * execute(): process commandline options and exec 
  *********************/
 void execute(char* command,int* spawnExit) {
@@ -205,13 +229,16 @@ void execute(char* command,int* spawnExit) {
   int background = 0;
   int redirectInBool = 0;
   int redirectOutBool = 0;
-
   int i;
   /*parent pid*/
   char parent_pid[8];
   for (i = 0; i < 8; i++) {
     parent_pid[i] = '\0';
-  }  
+  }
+  char tempStr[MAX_CHARS - 7];  
+  for (i = 0; i < MAX_CHARS - 7; i++) {
+    tempStr[i] = '\0';
+  }
 
   /*necessary for strtok*/ 
   const char space[2] = " ";
@@ -230,10 +257,17 @@ void execute(char* command,int* spawnExit) {
   /*parse the command*/
       //tokenize command
   char* token = strtok(command,space);
+  char* position;
   while (token != NULL) {
-    if (strstr(token,"$$")) {
+    /*handle substitution*/
+    position = strstr(token,"$$");
+    if (position) {
+      position = (char*)(position - token);
+      /*get the shell pid*/
       snprintf(parent_pid,(size_t)7,"%d",getpid());
-      arguments[argCount] = parent_pid;
+      substitute(token,tempStr,parent_pid,(unsigned long)position);
+      /*add substituted command to arguments*/
+            arguments[argCount] = tempStr;
       argCount++;
       token = strtok(NULL,space);
     } else if (strcmp(token,"<") == 0) {
@@ -333,6 +367,26 @@ void exitGracefully() {
  * changeDir(): cd command 
  *********************/
 void changeDir(char* dir) {
+  int i;
+  /*variables for substitution*/
+  char parent_pid[8];
+  for (i = 0; i < 8; i++) {
+    parent_pid[i] = '\0';
+  }
+  char tempStr[MAX_CHARS - 7];  
+  for (i = 0; i < MAX_CHARS - 7; i++) {
+    tempStr[i] = '\0';
+  }
+
+  /*handle substitution*/
+  char*  position = strstr(dir,"$$");
+  if (position) {
+    position = (char*)(position - dir);
+    /*get the shell pid*/
+    snprintf(parent_pid,(size_t)7,"%d",getpid());
+    substitute(dir,tempStr,parent_pid,(unsigned long)position);
+  }
+  
   /*position of cd argument start*/
   int dirStart = 3;
   int err = -5;
@@ -344,7 +398,7 @@ void changeDir(char* dir) {
       err = chdir(getenv("HOME"));
   } else {
       /*use second space-delim string; ignore everything else*/
-      token = strtok(dir,space);
+      token = strtok(tempStr,space);
       token = strtok(NULL,space);
       err = chdir(token);
    }
