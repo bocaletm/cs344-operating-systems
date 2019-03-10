@@ -51,7 +51,7 @@ int main(int argc, char* argv[]) {
             numsArray[idx] = c;
         }
         if (numsArray[idx] == 0) {
-            fprintf(stderr,"malloc error in main()\n");
+            perror("malloc error in main()\n");
             exit(1);
         }
         idx++;
