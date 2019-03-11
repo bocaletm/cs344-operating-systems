@@ -74,7 +74,7 @@ int main(int argc, char *argv[]) {
   if (socketpair(PF_UNIX,SOCK_DGRAM,0,pair) < 0) {
     error("socketpair failed in main\n");
   }
- 
+
   //set up fifo to control access to unix socket
   char* fifoFilename = "myfifo";
   mode_t fifo_mode = S_IRUSR | S_IWUSR;
@@ -92,7 +92,7 @@ int main(int argc, char *argv[]) {
       close(pair[0]);
       unixFD = pair[1];
       while (1) {
-       // unixFD = pair[0];
+        // unixFD = pair[0];
         //handler to wake up on sigcont
         signal(SIGCONT,handler);
 
@@ -165,34 +165,46 @@ int main(int argc, char *argv[]) {
             break;
           }
         } 
-        
+
         printf("trying to write to FD %d\n",establishedConnectionFD);
         fflush(stdout);
+        char message[1024];
+        memset(message,'\0',1024);
 
-        //verify connection 
         if (establishedConnectionFD > 0) {
-          printf("fd is %d\n",establishedConnectionFD);
-          fflush(stdout);
-          //get the message from the client and display it
           memset(longbuffer, '\0', 256);
           charsRead = recv(establishedConnectionFD, longbuffer, 255, 0); // Read the client's message from the socket
           if (charsRead < 0) {
-            error("ERROR reading from socket in 147");
+            error("ERROR reading from socket\n");
+          //basic authentication for otp_enc
+          } else if (longbuffer[0] != 'e') {
+            perror("otp_enc failed to indentify itself in socket\n");
           }
-          printf("SERVER %d: I received this from the client: \"%s\"\n", getpid(),longbuffer);
-
+          //skip the client's signature "e"
+          int midx = 0, i;
+          for (i = 0; i < 256; i++) {
+            if (i > 0) {
+              message[midx] = longbuffer[i];
+              midx++;
+            }
+          }
+          while(strstr(longbuffer,"\n") == NULL) {
+            charsRead = recv(establishedConnectionFD, longbuffer, 255, 0); // Read the client's message from the socket
+            if (charsRead < 0) {
+              error("ERROR writing to socket");
+            }
+            strcat(message,longbuffer);
+          }
+          printf("SERVER %d: I received this from the client: \"%s\"\n", getpid(),message);
           //send a Success message back to the client
-          charsRead = send(establishedConnectionFD, "I am the server, and I got your message", 39, 0); // Send success back
-          if (charsRead < 0) {
-            error("ERROR writing to socket");
-          }
-          close(establishedConnectionFD); // Close the existing socket which is connected to the client
-          //do work
-          exit(0);
+          charsRead = send(establishedConnectionFD, "I am the server, and I got your message", 39, 0); 
         }
+        close(establishedConnectionFD); // Close the existing socket which is connected to the client
+        //do work
       }
     }
   }
+
   /*********************************************
    * PARENT PROCESS
    * *******************************************/
@@ -217,14 +229,14 @@ int main(int argc, char *argv[]) {
   }
   listen(listenSocketFD, 5); // Flip the socket on - it can now receive up to 5 connections
 
-  
+
   //vars for IPC msg
   struct msghdr msg;
   struct cmsghdr *cmsg;
   struct iovec iov;
   char buff[CMSG_SPACE(sizeof(int))];
   char dummy[2]; 
-  
+
   //accept connections
   while (1) {
     printf("this is parent process %d\n",getpid());

@@ -58,12 +58,15 @@ int main(int argc, char *argv[]) {
   printf("CLIENT: Enter text to send to the server, and then hit enter: ");
   memset(buffer, '\0', sizeof(buffer)); // Clear out the buffer array
   fgets(buffer, sizeof(buffer) - 1, stdin); // Get input from the user, trunc to buffer - 1 chars, leaving \0
-  buffer[strcspn(buffer, "\n")] = '\0'; // Remove the trailing \n that fgets adds
-  printf("you wrote %s\n",buffer);
-  fflush(stdout);
-
+  //buffer[strcspn(buffer, "\n")] = '\0'; // Remove the trailing \n that fgets adds
+  
+  //add authentication to data
+  char msg[256];
+  memset(msg,'\0',sizeof(msg));
+  snprintf(msg,(size_t)255,"e%s",buffer);
+  
   // Send message to server
-  charsWritten = send(socketFD, buffer, strlen(buffer), 0); // Write to the server
+  charsWritten = send(socketFD, msg, strlen(msg), 0); // Write to the server
   if (charsWritten < 0) {
     error("CLIENT: ERROR writing to socket");
   }
