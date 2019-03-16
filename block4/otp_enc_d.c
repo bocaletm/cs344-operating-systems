@@ -226,7 +226,7 @@ int main(int argc, char *argv[]) {
           memset(key,'\0',sizeof(key));
 
           char plaintext[1024];
-          memset(key,'\0',sizeof(plaintext));
+          memset(plaintext,'\0',sizeof(plaintext));
           
           //use the @ message divider to split key and plaintext
           int k = 0;
@@ -235,7 +235,7 @@ int main(int argc, char *argv[]) {
           for (i = 0; i < midx; i++) {
             if (message[i] == '@') {
               flip = 1;
-              break;
+              continue;
             } else if (flip == 0) {
               key[k] = message[i];
               k++;
