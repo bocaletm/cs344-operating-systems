@@ -244,7 +244,11 @@ int main(int argc, char *argv[]) {
               p++;
             }
           }
-          encrypt(key,plaintext);
+          if (k >= p) {
+            encrypt(key,plaintext);
+          } else {
+            error("The key is too short for the message\n");
+          }
         }    
       }
     }
