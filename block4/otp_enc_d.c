@@ -35,12 +35,27 @@ void handler(int signo) {
 }
 
 /************************
- *  Error function used for reporting issues
+ *  Error function used for reporting major issues
+ *************************/
+void errorx(const char *msg) { 
+  perror(msg);
+  fflush(stdout);
+  exit(1); 
+}
+
+/************************
+ *  Error function used for reporting minor issues
  *************************/
 void error(const char *msg) { 
   perror(msg);
   fflush(stdout);
-  exit(1); 
+}
+
+/************************
+ *  encrypt(): encrypts param2 using param1 key
+ *************************/
+void encrypt(char* key, char* msg) {
+  printf("key/msg: [%s]\t[%s]\n",key,msg);
 }
 
 /************************
@@ -72,7 +87,7 @@ int main(int argc, char *argv[]) {
   memset(unix_buffer,'\0',sizeof(unix_buffer));
   int pair[2], unixFD;
   if (socketpair(PF_UNIX,SOCK_DGRAM,0,pair) < 0) {
-    error("socketpair failed in main\n");
+    errorx("socketpair failed in main\n");
   }
 
   //set up fifo to control access to unix socket
@@ -84,7 +99,7 @@ int main(int argc, char *argv[]) {
   for (i = 0; i < MAX_FORKS; i++) {
     spawnpid[i] = fork();
     if (spawnpid[i] == -1) {
-      error("Fork error. Exiting.\n");
+      errorx("Fork error. Exiting.\n");
       /*********************************************
        * CHILD PROCESSES
        * *******************************************/
@@ -154,7 +169,7 @@ int main(int argc, char *argv[]) {
         msg.msg_control = buff;
         readlen = recvmsg(unixFD, &msg, 0);
         if ((int)readlen <= 0) {
-          error("recvmsg in parent process\n");
+          errorx("recvmsg in parent process\n");
         } 
         establishedConnectionFD = -1; 
         for (cmsg = CMSG_FIRSTHDR(&msg); cmsg; cmsg = CMSG_NXTHDR(&msg, cmsg)) {
@@ -170,18 +185,22 @@ int main(int argc, char *argv[]) {
         fflush(stdout);
         char message[1024];
         memset(message,'\0',1024);
+        
+        int midx = 0, i;
 
+        int authError = 0;
         if (establishedConnectionFD > 0) {
           memset(longbuffer, '\0', 256);
           charsRead = recv(establishedConnectionFD, longbuffer, 255, 0); // Read the client's message from the socket
           if (charsRead < 0) {
-            error("ERROR reading from socket\n");
+            errorx("ERROR reading from socket\n");
           //basic authentication for otp_enc
           } else if (longbuffer[0] != 'e') {
-            perror("otp_enc failed to indentify itself in socket\n");
+            error("otp_enc failed to indentify itself in socket\n");
+            authError = 1;
           }
+
           //skip the client's signature "e"
-          int midx = 0, i;
           for (i = 0; i < 256; i++) {
             if (i > 0) {
               message[midx] = longbuffer[i];
@@ -191,7 +210,7 @@ int main(int argc, char *argv[]) {
           while(strstr(longbuffer,"\n") == NULL) {
             charsRead = recv(establishedConnectionFD, longbuffer, 255, 0); // Read the client's message from the socket
             if (charsRead < 0) {
-              error("ERROR writing to socket");
+              errorx("ERROR writing to socket");
             }
             strcat(message,longbuffer);
           }
@@ -200,7 +219,33 @@ int main(int argc, char *argv[]) {
           charsRead = send(establishedConnectionFD, "I am the server, and I got your message", 39, 0); 
         }
         close(establishedConnectionFD); // Close the existing socket which is connected to the client
-        //do work
+
+        //don't do any work on the message if the client failed to identify
+        if (authError == 0) {
+          char key[1024];
+          memset(key,'\0',sizeof(key));
+
+          char plaintext[1024];
+          memset(key,'\0',sizeof(plaintext));
+          
+          //use the @ message divider to split key and plaintext
+          int k = 0;
+          int p = 0;
+          int flip = 0;
+          for (i = 0; i < midx; i++) {
+            if (message[i] == '@') {
+              flip = 1;
+              break;
+            } else if (flip == 0) {
+              key[k] = message[i];
+              k++;
+            } else if (flip == 1) {
+              plaintext[p] = message[i];
+              p++;
+            }
+          }
+          encrypt(key,plaintext);
+        }    
       }
     }
   }
@@ -220,12 +265,12 @@ int main(int argc, char *argv[]) {
   // Set up the socket
   listenSocketFD = socket(AF_INET, SOCK_STREAM, 0); // Create the socket
   if (listenSocketFD < 0) {
-    error("ERROR opening socket");
+    errorx("ERROR opening socket");
   }
 
   // Enable the socket to begin listening
   if (bind(listenSocketFD, (struct sockaddr*)&serverAddress, sizeof(serverAddress)) < 0) {
-    error("ERROR on binding");
+    errorx("ERROR on binding");
   }
   listen(listenSocketFD, 5); // Flip the socket on - it can now receive up to 5 connections
 
@@ -245,7 +290,7 @@ int main(int argc, char *argv[]) {
     sizeOfClientInfo = sizeof(clientAddress); // Get the size of the address for the client that will connect
     establishedConnectionFD = accept(listenSocketFD, (struct sockaddr *)&clientAddress, &sizeOfClientInfo); // Accept
     if (establishedConnectionFD < 0) {
-      error("ERROR on accept");
+      errorx("ERROR on accept");
     }
 
     //IPC message
@@ -266,7 +311,7 @@ int main(int argc, char *argv[]) {
 
     //send the FD
     if (sendmsg(unixFD, &msg, 0) < 0) {
-      error("sendmsg failed\n");
+      errorx("sendmsg failed\n");
     }
 
     printf("\naccepted connection at %d\n",establishedConnectionFD);
@@ -290,7 +335,7 @@ int main(int argc, char *argv[]) {
 
     fifoFD = open(fifoFilename,O_WRONLY);
     if (fifoFD == -1) {
-      error("fifo open error in parent\n");
+      errorx("fifo open error in parent\n");
     }
     write(fifoFD,tmpIn,strlen(tmpIn));
     close(fifoFD);
