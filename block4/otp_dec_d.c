@@ -166,7 +166,8 @@ int main(int argc, char *argv[]) {
         // unixFD = pair[0];
         //handler to wake up on sigcont
         signal(SIGCONT,handler);
-        //signal(SIGPIPE,pipeHandler);
+        //do not let broken pipes kill process
+        signal(SIGPIPE,SIG_IGN);
         pause();
         //read FD integer from parent through fifo
         //fifo used so only one process (the first to get to the fifo)

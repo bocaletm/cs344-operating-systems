@@ -39,4 +39,4 @@ clean :
 	-if [ -f otp_dec_d ]; then rm otp_dec_d 2> /dev/null; fi
 	-if [ -f otp_dec ]; then rm otp_dec 2> /dev/null; fi
 	-if [ -f keygen ]; then rm keygen 2> /dev/null; fi
-	-rm -rf myfifo
+	-rm -rf *fifo
