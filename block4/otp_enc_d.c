@@ -73,9 +73,6 @@ void error(const char *msg) {
  *  encrypt(): encrypts param2 using param1 key
  *************************/
 void encrypt(char* key, char* msg, int n) {
-  printf("key/msg: [%s]\t[%s]\n",key,msg);
-  fflush(stdout);
-
   int i;
   int c1;
   int c2;
@@ -92,10 +89,8 @@ void encrypt(char* key, char* msg, int n) {
     c2 = (int)key[i] - 65;
     //add two chars
     c1 += c2;
-    printf("msg + key {%d}\n",c1);
     //modulus operation
     c1 = c1 % 27;
-    printf("msg + key mod 27 {%d}\n",c1);
     //add 65 back
     c1 += 65;
     if (c1 == 91) {
@@ -103,10 +98,7 @@ void encrypt(char* key, char* msg, int n) {
     } else {
       msg[i] = (char)c1;
     }
-    printf("resulting char %c",msg[i]);
   }
-  printf("key/msg: [%s]\t[%s]\n",key,msg);
-
 }
 
 /************************
@@ -163,15 +155,7 @@ int main(int argc, char *argv[]) {
         //handler to wake up on sigcont
         signal(SIGCONT,handler);
         //signal(SIGPIPE,pipeHandler);
-
-        printf("child %d sleeping\n",getpid());
-        fflush(stdout);
-
         pause();
-
-        printf("child %d woke up\n",getpid());
-        fflush(stdout);
-
         //read FD integer from parent through fifo
         //fifo used so only one process (the first to get to the fifo)
         //reads the FD data from the unix socket
@@ -179,14 +163,10 @@ int main(int argc, char *argv[]) {
         if (fifoFD <= 0) {
           continue;
         }
-        printf("getting ready to read fifo\n");
-        fflush(stdout);
         while(strstr(tmpOut,"@") == NULL) {
           memset(buffer,'\0',sizeof(buffer));
           r = read(fifoFD,buffer,sizeof(buffer) - 1); 
           strcat(tmpOut,buffer);
-          printf("read fifo: [%s]\n",tmpOut);
-          fflush(stdout);
           if (r <= 0) {
             break;
           }
@@ -197,9 +177,6 @@ int main(int argc, char *argv[]) {
 
         r = strstr(tmpOut,"@") - tmpOut;
         tmpOut[r] = '\0';
-
-        printf("%d read %s from fifo as string\n",getpid(),tmpOut);
-        fflush(stdout);
 
         //access file descriptor through unix socket
         struct msghdr msg;
@@ -231,9 +208,6 @@ int main(int argc, char *argv[]) {
             break;
           }
         } 
-
-        printf("trying to write to FD %d\n",establishedConnectionFD);
-        fflush(stdout);
         int msgSize = 2048;
         int sectionSize = 1024;
         char message[msgSize];
@@ -268,14 +242,8 @@ int main(int argc, char *argv[]) {
             }
             strcat(message,longbuffer);
           }
-
-          printf("SERVER %d: I received this from the client: %s\n", getpid(),message);
-
           //don't do any work on the message if the client failed to identify
           if (authError == 0) {
-            printf("parsing in server\n");
-            fflush(stdout);
-
             char key[sectionSize];
             memset(key,'\0',sizeof(key));
 
@@ -288,10 +256,8 @@ int main(int argc, char *argv[]) {
             i = 0;
             unsigned char c = message[i]; 
             int flip = 0;
-            printf("message: [%s]\n",message);
 
             while (c != '@') {
-              printf("%c\n",c);
               if (c == ';') {
                 flip = 1;
                 i++;
@@ -307,8 +273,6 @@ int main(int argc, char *argv[]) {
               i++;
               c = message[i];
             }
-            printf("k = %d t = %d",k,t);
-            fflush(stdout);
 
             if (k >= t) {
               encrypt(key,text,t);
@@ -318,15 +282,11 @@ int main(int argc, char *argv[]) {
               text[0] = '@';
               text[1] = '\0';
             }
-            printf("sending decrypt message back to client\n");
-            fflush(stdout);
             //send decrypted message back to the client
             charsRead = send(establishedConnectionFD,text,strlen(text),0); 
           }
-          printf("server closing connection\n");
-          fflush(stdout);
-          //close(establishedConnectionFD); // Close the existing socket which is connected to the client
         }
+          close(establishedConnectionFD); // Close the existing socket which is connected to the client
       }
     }
   }
@@ -370,8 +330,6 @@ int main(int argc, char *argv[]) {
 
   //accept connections
   while (1) {
-    printf("this is parent process %d\n",getpid());
-    fflush(stdout);
     // Accept a connection, blocking if one is not available until one connects
     sizeOfClientInfo = sizeof(clientAddress); // Get the size of the address for the client that will connect
     establishedConnectionFD = accept(listenSocketFD, (struct sockaddr *)&clientAddress, &sizeOfClientInfo); // Accept
@@ -400,13 +358,8 @@ int main(int argc, char *argv[]) {
       errorx("sendmsg failed\n");
     }
 
-    printf("\naccepted connection at %d\n",establishedConnectionFD);
-    fflush(stdout);
-
     //redirect work to an open child
     //wake up children
-    printf("trying to wake up children from parent %d\n",getpid());
-    fflush(stdout);
     for (i = 0; i < MAX_FORKS; i++) {
       kill(spawnpid[i],SIGCONT);
     }
@@ -415,9 +368,6 @@ int main(int argc, char *argv[]) {
     char tmpIn[256];
     memset(tmpIn,'\0',sizeof(tmpIn));
     sprintf(tmpIn,"%d@",establishedConnectionFD); 
-
-    printf("writing %s to fifo as string\n",tmpIn);
-    fflush(stdout);
 
     fifoFD = open(fifoFilename,O_WRONLY);
     if (fifoFD == -1) {

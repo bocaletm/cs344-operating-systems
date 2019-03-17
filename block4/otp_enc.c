@@ -108,10 +108,6 @@ int main(int argc, char *argv[]) {
   //compose msg including authentication prefix
   snprintf(msg,(size_t)msgLimit,"e%s;%s@",key,plaintext);
   
-  
-  printf("msg: %s\n",msg);
-  fflush(stdout);
-
   free(plaintext);
   free(key);
   
@@ -173,8 +169,12 @@ int main(int argc, char *argv[]) {
   }
   if (buffer[0] == '@') {
     error("CLIENT: server could not encrypt message\n");
+  } else {
+    //remove end of message and print
+    buffer[strcspn(buffer, "@")] = '\0';
+    printf("%s\n", buffer);
+    fflush(stdout);
   }
-  printf("CLIENT: I received this from the server: \"%s\"\n", buffer);
 
   close(socketFD); // Close the socket
   return 0;
