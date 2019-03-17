@@ -89,8 +89,8 @@ int main(int argc, char *argv[]) {
   }
 
   //read files from args
-  int fileLimit = 1024;
-  int msgLimit = 2048;
+  int fileLimit = 100000;
+  int msgLimit = 200100;
   char* plaintext = 0;
   plaintext = malloc(fileLimit * sizeof(char));
   memset(plaintext,'\0',fileLimit);
@@ -119,7 +119,7 @@ int main(int argc, char *argv[]) {
   int socketFD, portNumber, charsWritten, charsRead;
   struct sockaddr_in serverAddress;
   struct hostent* serverHostInfo;
-  char buffer[256];
+  char buffer[fileLimit];
 
 
   // Set up the server address struct
@@ -165,10 +165,12 @@ int main(int argc, char *argv[]) {
   }
 
   if (charsRead < 0) {
-    error("CLIENT: ERROR reading from socket\n");
+    close(socketFD); // Close the socket
+    errorx("CLIENT: ERROR reading from socket\n");
   }
   if (buffer[0] == '@') {
-    error("CLIENT: server could not encrypt message\n");
+    close(socketFD); // Close the socket
+    errorx("CLIENT: server could not encrypt message\n");
   } else {
     //remove end of message and print
     buffer[strcspn(buffer, "@")] = '\0';
