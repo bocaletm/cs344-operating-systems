@@ -170,7 +170,8 @@ int main(int argc, char *argv[]) {
   }
   if (buffer[0] == '@') {
     close(socketFD); // Close the socket
-    errorx("CLIENT: server could not encrypt message\n");
+    error("CLIENT: server could not encrypt message\n");
+    exit(2);
   } else {
     //remove end of message and print
     buffer[strcspn(buffer, "@")] = '\0';
