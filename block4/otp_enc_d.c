@@ -22,7 +22,7 @@
 #include <fcntl.h>
 
 //set up fifo to control access to unix socket
-const char* fifoFilename = "myfifo";
+const char* fifoFilename = "encfifo";
 
 const int MAX_FORKS = 5;
 int caught_signal = -5;
