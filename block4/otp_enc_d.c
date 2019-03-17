@@ -21,6 +21,9 @@
 #include <sys/wait.h>
 #include <fcntl.h>
 
+//set up fifo to control access to unix socket
+const char* fifoFilename = "myfifo";
+
 const int MAX_FORKS = 5;
 int caught_signal = -5;
 
@@ -28,7 +31,24 @@ int caught_signal = -5;
 int usr_interrupt = 0;
 
 /************************
- * handler
+ * handler: delete fifo file
+ * **********************/
+void fifoHandler(int signo) {
+  remove(fifoFilename);
+  exit(0);
+}
+
+/************************
+ * handler: broken pipes in child process 
+ * **********************/
+void pipeHandler(int signo) {
+  char* message = "error broken pipe\n";
+  write(STDERR_FILENO,message,18);
+  fflush(stderr);
+}
+
+/************************
+ * handler: do not exit on signal from child
  * **********************/
 void handler(int signo) {
   caught_signal = signo;
@@ -39,7 +59,6 @@ void handler(int signo) {
  *************************/
 void errorx(const char *msg) { 
   perror(msg);
-  fflush(stdout);
   exit(1); 
 }
 
@@ -47,15 +66,47 @@ void errorx(const char *msg) {
  *  Error function used for reporting minor issues
  *************************/
 void error(const char *msg) { 
-  perror(msg);
-  fflush(stdout);
+  fprintf(stderr,msg);
 }
 
 /************************
  *  encrypt(): encrypts param2 using param1 key
  *************************/
-void encrypt(char* key, char* msg) {
+void encrypt(char* key, char* msg, int n) {
   printf("key/msg: [%s]\t[%s]\n",key,msg);
+  fflush(stdout);
+
+  int i;
+  int c1;
+  int c2;
+  for (i = 0; i < n; i++) {
+    //handle spaces, treated as character after Z
+    if (msg[i] == ' ') {
+      msg[i] = 91;
+    }
+    if (key[i] == ' ') {
+      key[i] = 91;
+    }
+    //convert char to int, starting with A = 0
+    c1 = (int)msg[i] - 65; 
+    c2 = (int)key[i] - 65;
+    //add two chars
+    c1 += c2;
+    printf("msg + key {%d}\n",c1);
+    //modulus operation
+    c1 = c1 % 27;
+    printf("msg + key mod 27 {%d}\n",c1);
+    //add 65 back
+    c1 += 65;
+    if (c1 == 91) {
+      msg[i] = ' ';
+    } else {
+      msg[i] = (char)c1;
+    }
+    printf("resulting char %c",msg[i]);
+  }
+  printf("key/msg: [%s]\t[%s]\n",key,msg);
+
 }
 
 /************************
@@ -63,10 +114,11 @@ void encrypt(char* key, char* msg) {
  * *********************/
 int main(int argc, char *argv[]) {
   //vars for client-server sockets
+  int bufferSize = 256;
   int listenSocketFD, establishedConnectionFD = -5, portNumber, charsRead;
   socklen_t sizeOfClientInfo;
   struct sockaddr_in serverAddress, clientAddress;
-  char longbuffer[256];
+  char longbuffer[bufferSize];
   // Check usage & args
   if (argc < 2) { 
     fprintf(stderr,"USAGE: %s port\n", argv[0]); exit(1); 
@@ -77,13 +129,13 @@ int main(int argc, char *argv[]) {
   pid_t spawnpid[MAX_FORKS];
   int i;
   int r;
-  char tmpOut[256];
+  char tmpOut[bufferSize];
   memset(tmpOut,'\0',sizeof(tmpOut));
-  char buffer[256];
+  char buffer[bufferSize];
   memset(tmpOut,'\0',sizeof(buffer));
 
   //IPC socket to share file descriptors 
-  char unix_buffer[256];
+  char unix_buffer[bufferSize];
   memset(unix_buffer,'\0',sizeof(unix_buffer));
   int pair[2], unixFD;
   if (socketpair(PF_UNIX,SOCK_DGRAM,0,pair) < 0) {
@@ -91,10 +143,10 @@ int main(int argc, char *argv[]) {
   }
 
   //set up fifo to control access to unix socket
-  char* fifoFilename = "myfifo";
   mode_t fifo_mode = S_IRUSR | S_IWUSR;
   int newfifo = mkfifo(fifoFilename,fifo_mode);
   int fifoFD = -5;
+
 
   for (i = 0; i < MAX_FORKS; i++) {
     spawnpid[i] = fork();
@@ -110,6 +162,7 @@ int main(int argc, char *argv[]) {
         // unixFD = pair[0];
         //handler to wake up on sigcont
         signal(SIGCONT,handler);
+        //signal(SIGPIPE,pipeHandler);
 
         printf("child %d sleeping\n",getpid());
         fflush(stdout);
@@ -118,8 +171,6 @@ int main(int argc, char *argv[]) {
 
         printf("child %d woke up\n",getpid());
         fflush(stdout);
-
-        signal(SIGCONT,SIG_IGN);
 
         //read FD integer from parent through fifo
         //fifo used so only one process (the first to get to the fifo)
@@ -183,73 +234,99 @@ int main(int argc, char *argv[]) {
 
         printf("trying to write to FD %d\n",establishedConnectionFD);
         fflush(stdout);
-        char message[1024];
-        memset(message,'\0',1024);
-        
+        int msgSize = 2048;
+        int sectionSize = 1024;
+        char message[msgSize];
+        memset(message,'\0',msgSize);
+
         int midx = 0, i;
 
         int authError = 0;
         if (establishedConnectionFD > 0) {
-          memset(longbuffer, '\0', 256);
-          charsRead = recv(establishedConnectionFD, longbuffer, 255, 0); // Read the client's message from the socket
+          memset(longbuffer, '\0', bufferSize);
+          charsRead = recv(establishedConnectionFD, longbuffer, bufferSize - 1, 0); // Read the client's message from the socket
           if (charsRead < 0) {
-            errorx("ERROR reading from socket\n");
-          //basic authentication for otp_enc
+            error("ERROR reading from socket\n");
+            //basic authentication for otp_enc
           } else if (longbuffer[0] != 'e') {
             error("otp_enc failed to indentify itself in socket\n");
             authError = 1;
           }
 
           //skip the client's signature "e"
-          for (i = 0; i < 256; i++) {
+          for (i = 0; i < bufferSize; i++) {
             if (i > 0) {
               message[midx] = longbuffer[i];
               midx++;
             }
           }
-          while(strstr(longbuffer,"\n") == NULL) {
-            charsRead = recv(establishedConnectionFD, longbuffer, 255, 0); // Read the client's message from the socket
+
+          while(strstr(longbuffer,"@") == NULL) {
+            charsRead = recv(establishedConnectionFD, longbuffer, bufferSize - 1, 0); // Read the client's message from the socket
             if (charsRead < 0) {
-              errorx("ERROR writing to socket");
+              error("ERROR reading from socket");
             }
             strcat(message,longbuffer);
           }
-          printf("SERVER %d: I received this from the client: \"%s\"\n", getpid(),message);
-          //send a Success message back to the client
-          charsRead = send(establishedConnectionFD, "I am the server, and I got your message", 39, 0); 
-        }
-        close(establishedConnectionFD); // Close the existing socket which is connected to the client
 
-        //don't do any work on the message if the client failed to identify
-        if (authError == 0) {
-          char key[1024];
-          memset(key,'\0',sizeof(key));
+          printf("SERVER %d: I received this from the client: %s\n", getpid(),message);
 
-          char plaintext[1024];
-          memset(plaintext,'\0',sizeof(plaintext));
-          
-          //use the @ message divider to split key and plaintext
-          int k = 0;
-          int p = 0;
-          int flip = 0;
-          for (i = 0; i < midx; i++) {
-            if (message[i] == '@') {
-              flip = 1;
-              continue;
-            } else if (flip == 0) {
-              key[k] = message[i];
-              k++;
-            } else if (flip == 1) {
-              plaintext[p] = message[i];
-              p++;
+          //don't do any work on the message if the client failed to identify
+          if (authError == 0) {
+            printf("parsing in server\n");
+            fflush(stdout);
+
+            char key[sectionSize];
+            memset(key,'\0',sizeof(key));
+
+            char text[sectionSize];
+            memset(text,'\0',sizeof(text));
+
+            //use the ; message divider to split key and plaintext
+            int k = 0;
+            int t = 0;
+            i = 0;
+            unsigned char c = message[i]; 
+            int flip = 0;
+            printf("message: [%s]\n",message);
+
+            while (c != '@') {
+              printf("%c\n",c);
+              if (c == ';') {
+                flip = 1;
+                i++;
+                c = message[i];
+                continue;
+              } else if (flip == 0) {
+                key[k] = c;
+                k++;
+              } else if (flip == 1) {
+                text[t] = c;
+                t++;
+              }
+              i++;
+              c = message[i];
             }
+            printf("k = %d t = %d",k,t);
+            fflush(stdout);
+
+            if (k >= t) {
+              encrypt(key,text,t);
+              text[t] = '@';
+            } else {
+              error("The key is too short for the message\n");
+              text[0] = '@';
+              text[1] = '\0';
+            }
+            printf("sending decrypt message back to client\n");
+            fflush(stdout);
+            //send decrypted message back to the client
+            charsRead = send(establishedConnectionFD,text,strlen(text),0); 
           }
-          if (k >= p) {
-            encrypt(key,plaintext);
-          } else {
-            error("The key is too short for the message\n");
-          }
-        }    
+          printf("server closing connection\n");
+          fflush(stdout);
+          //close(establishedConnectionFD); // Close the existing socket which is connected to the client
+        }
       }
     }
   }
@@ -257,6 +334,11 @@ int main(int argc, char *argv[]) {
   /*********************************************
    * PARENT PROCESS
    * *******************************************/
+  //clean up fifo on termination
+  signal(SIGINT,fifoHandler);
+  signal(SIGTSTP,fifoHandler); 
+  signal(SIGTERM,fifoHandler);
+
   close(pair[1]);
   unixFD = pair[0];
   // Set up the address struct for this process (the server)
