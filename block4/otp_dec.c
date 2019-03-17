@@ -40,7 +40,7 @@ void validate(char* msg) {
   //check for invalid characters (skip beginning and end markers)
   for (i = 1; i < strlen(msg) -1; i++) {
     if ((msg[i] < 65 || msg[i] > 90) && msg[i] != ' ' && msg[i] != ';') {
-      errorx("invalid characters in message or key\n");
+      errorx("otp_dec error: input contains bad characters\n");
     }
     if (msg[i] == ';') {
       k = i;
@@ -49,7 +49,7 @@ void validate(char* msg) {
   //check for invalid key length
   p = i - k;
   if (k < p) {
-    errorx("the key is too short\n");
+    errorx("otp_enc error: the key is too short\n");
   }
 }
 
@@ -141,7 +141,11 @@ int main(int argc, char *argv[]) {
 
   // Connect to server
   if (connect(socketFD, (struct sockaddr*)&serverAddress, sizeof(serverAddress)) < 0) {
-    error("CLIENT: ERROR connecting\n");
+    char errorMsg[50];
+    memset(errorMsg,'\0',50);
+    sprintf(errorMsg,"Error: could not contact otp_dec_d on port %d\n",portNumber);
+    fprintf(stderr,errorMsg);
+    fflush(stderr);
   }
 
   int totalSent = 0; 
